@@ -21,3 +21,32 @@ Restartuje Home Assistant. U integracijama treba da se pojavi nova integracija `
 
 ![alt text](image.png)
 ![alt text](image-1.png)
+
+
+
+#### Opcionalno, Alerting
+
+```yaml
+alias: Bez struje
+description: Send notification when power outage is scheduled for Negosavlje
+triggers:
+  - entity_id: sensor.power_outage_negosavlje
+    to: "true"
+    trigger: state
+conditions: []
+actions:
+  - action: notify.habot
+    data:
+      message: |-
+        {% if states.sensor.power_outage_negosavlje is not none and 
+           states.sensor.power_outage_negosavlje.attributes is not none and 
+           states.sensor.power_outage_negosavlje.attributes.outages is not none %}
+          {% for outage in states.sensor.power_outage_negosavlje.attributes.outages %}
+          ⚡️ Isključenje struje - Negosavlje
+          📅 Datum: {{ outage.date }}
+          ⏰ Vreme: {{ outage.time }}
+          ℹ️ Detalji: {{ outage.description }}
+          {% endfor %}
+        {% endif %}
+mode: single
+```
