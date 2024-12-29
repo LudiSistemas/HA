@@ -13,3 +13,5 @@ Ova integracija omogućava praćenje planiranih isključenja električne energij
 sensor:
   - platform: power_outage
 ```
+Sada je potrebno dodati custom component u Home Assistant. Najednostavnije koristiti Studio Code server integraciju za ovo. 
+
