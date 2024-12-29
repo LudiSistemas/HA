@@ -15,3 +15,9 @@ sensor:
 ```
 Sada je potrebno dodati custom component u Home Assistant. Najednostavnije koristiti Studio Code server integraciju za ovo. 
 
+### Finalni korak
+Restartuje Home Assistant. U integracijama treba da se pojavi nova integracija `Power Outage` i senzor `power_outage`.
+
+
+![alt text](image.png)
+![alt text](image-1.png)
