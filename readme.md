@@ -5,11 +5,11 @@ Ova integracija omogućava praćenje planiranih isključenja električne energij
 ## Instalacija
 
 1. Napravite novi folder `python_scripts/bez_struje` u vašem Home Assistant konfiguracionom direktorijumu
-2. Kopirajte fajl `bez_struje_scraper.py` u taj folder
+2. Kopirajte fajl `power_outage_scraper.py` u taj folder
 
 ### Konfiguracija u configuration.yaml
 
 ```yaml
 sensor:
-  - platform: bez_struje
+  - platform: power_outage
 ```
