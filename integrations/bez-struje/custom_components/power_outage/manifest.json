@@ -1,0 +1,10 @@
+{
+    "domain": "power_outage",
+    "name": "Power Outage",
+    "documentation": "",
+    "dependencies": [],
+    "codeowners": [],
+    "requirements": ["beautifulsoup4==4.12.2"],
+    "version": "1.0.0"
+  }
+  
