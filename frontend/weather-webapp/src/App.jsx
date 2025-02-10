@@ -33,15 +33,31 @@ function App() {
   const fetchData = async () => {
     try {
       const response = await fetch('/api/sensors');
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      
+      // Get the raw text first
+      const text = await response.text();
+      console.log('Raw response:', text);
+      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      const result = await response.json();
-      console.log('Fetched data:', result); // Debug log
+      
+      // Try to parse the text as JSON
+      let result;
+      try {
+        result = JSON.parse(text);
+      } catch (parseError) {
+        console.error('JSON Parse error:', parseError);
+        throw new Error('Invalid JSON response from server');
+      }
+      
+      console.log('Parsed data:', result);
       setData(result);
       setError(null);
     } catch (err) {
-      console.error('Fetch error:', err); // Debug log
+      console.error('Fetch error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
