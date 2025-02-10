@@ -2,18 +2,10 @@ server {
     listen 80;
     server_name weather.your-domain.com;
 
-    # Security headers with updated CSP
+    # Basic security headers
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "DENY" always;
     add_header X-XSS-Protection "1; mode=block" always;
-    add_header Content-Security-Policy "
-        default-src 'self';
-        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-        font-src 'self' https://fonts.gstatic.com;
-        img-src 'self' data:;
-        connect-src 'self' https://your_public_api_url;
-        script-src 'self' 'unsafe-inline' 'unsafe-eval';
-    " always;
 
     # Only allow Cloudflare IPs
     allow 173.245.48.0/20;
