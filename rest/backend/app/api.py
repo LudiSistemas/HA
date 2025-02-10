@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from typing import List
 import httpx
 from pydantic import BaseModel
@@ -6,6 +6,21 @@ from app.config import settings
 
 # Create router with prefix to match nginx location
 router = APIRouter(prefix="/api", tags=["sensors"])
+
+# Debug route to check if API is accessible
+@router.get("/ping")
+async def ping():
+    """Simple endpoint to verify API is working"""
+    return {"status": "ok", "message": "API is running"}
+
+# Debug route to see what sensors are configured
+@router.get("/config")
+async def get_config():
+    """Returns current configuration (excluding sensitive data)"""
+    return {
+        "sensors": settings.SENSOR_IDS,
+        "hass_url": settings.HASS_URL
+    }
 
 # Response model for better OpenAPI documentation
 class SensorData(BaseModel):
