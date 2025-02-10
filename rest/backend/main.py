@@ -8,6 +8,7 @@ from app.api import router
 from app.config import settings
 import time
 import os
+import logging
 
 # Create limiter instance
 limiter = Limiter(key_func=get_remote_address)
@@ -31,6 +32,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add this after creating the FastAPI app
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -38,11 +43,14 @@ async def log_requests(request: Request, call_next):
     forwarded_for = request.headers.get("X-Forwarded-For")
     real_ip = forwarded_for.split(",")[0] if forwarded_for else request.client.host
     
+    logger.info(f"Incoming request: {request.method} {request.url.path}")
+    logger.info(f"Headers: {request.headers}")
+    
     start_time = time.time()
     response = await call_next(request)
     duration = time.time() - start_time
     
-    print(f"{real_ip} - {request.method} {request.url.path} - {response.status_code} - {duration:.2f}s")
+    logger.info(f"{real_ip} - {request.method} {request.url.path} - {response.status_code} - {duration:.2f}s")
     return response
 
 # Global rate limit - using X-Forwarded-For for proper IP behind proxy

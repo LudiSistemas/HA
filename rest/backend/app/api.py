@@ -2,9 +2,10 @@ from fastapi import APIRouter, HTTPException
 import httpx
 from app.config import settings
 
-router = APIRouter()
+# Create router with prefix to match nginx location
+router = APIRouter(prefix="/api")
 
-@router.get("/api/sensors")
+@router.get("/sensors")
 async def get_sensor_data():
     headers = {
         "Authorization": f"Bearer {settings.HASS_TOKEN}",
