@@ -30,13 +30,23 @@ function App() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Get the base URL from environment variables
+  const API_URL = `${import.meta.env.VITE_BACKEND_URL}/api/sensors`;
+  console.log('Using API URL:', API_URL);
+
   const fetchData = async () => {
     try {
-      const response = await fetch('/api/sensors');
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
+      console.log('Fetching from:', API_URL);
+      const response = await fetch(API_URL, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      });
       
-      // Get the raw text first
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      
       const text = await response.text();
       console.log('Raw response:', text);
       
@@ -44,18 +54,19 @@ function App() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      // Try to parse the text as JSON
-      let result;
-      try {
-        result = JSON.parse(text);
-      } catch (parseError) {
-        console.error('JSON Parse error:', parseError);
-        throw new Error('Invalid JSON response from server');
+      if (!text) {
+        throw new Error('Empty response from server');
       }
       
-      console.log('Parsed data:', result);
-      setData(result);
-      setError(null);
+      try {
+        const result = JSON.parse(text);
+        console.log('Parsed data:', result);
+        setData(result);
+        setError(null);
+      } catch (parseError) {
+        console.error('JSON Parse error:', parseError);
+        throw new Error(`Invalid JSON response: ${text.substring(0, 100)}...`);
+      }
     } catch (err) {
       console.error('Fetch error:', err);
       setError(err.message);
