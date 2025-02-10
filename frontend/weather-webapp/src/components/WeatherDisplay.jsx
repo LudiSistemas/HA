@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { sensorConfig } from '../config/sensors';
+import WeatherChart from './WeatherChart';
 
 const glow = keyframes`
   0% {
@@ -30,12 +31,12 @@ const WeatherCard = styled.div`
   padding: 20px;
   margin: 10px;
   width: 90%;
-  max-width: 400px;
+  max-width: 600px;
   border: 1px solid #0ff;
   animation: ${glow} 2s ease-in-out infinite;
 
   @media (min-width: 768px) {
-    width: 70%;
+    width: 80%;
   }
 `;
 
@@ -69,6 +70,8 @@ const ErrorMessage = styled.div`
 `;
 
 const WeatherDisplay = ({ data, error }) => {
+  const [historicalData, setHistoricalData] = useState({});
+
   const getSensorConfig = (entityId) => {
     return sensorConfig[entityId] || {
       name: entityId,
@@ -80,6 +83,29 @@ const WeatherDisplay = ({ data, error }) => {
   const formatValue = (value, precision) => {
     return Number(value).toFixed(precision);
   };
+
+  const fetchHistory = async (sensorId) => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/sensors/${sensorId}/history`);
+      if (response.ok) {
+        const data = await response.json();
+        setHistoricalData(prev => ({
+          ...prev,
+          [sensorId]: data
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching history:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (data) {
+      data.forEach(sensor => {
+        fetchHistory(sensor.entity_id);
+      });
+    }
+  }, [data]);
 
   if (error) {
     return <ErrorMessage>{error}</ErrorMessage>;
@@ -98,6 +124,11 @@ const WeatherDisplay = ({ data, error }) => {
               {formatValue(sensor.state, config.precision)}
               {sensor.attributes.unit_of_measurement}
             </Value>
+            <WeatherChart 
+              data={historicalData[sensor.entity_id]}
+              unit={sensor.attributes.unit_of_measurement}
+              precision={config.precision}
+            />
             <LastUpdated>
               Zadnji put ažurirano: {new Date(sensor.last_updated).toLocaleString()}
             </LastUpdated>

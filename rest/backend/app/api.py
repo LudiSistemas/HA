@@ -3,6 +3,7 @@ from typing import List
 import httpx
 from pydantic import BaseModel
 from app.config import settings
+from datetime import datetime, timedelta
 
 # Create router with prefix to match nginx location
 router = APIRouter(prefix="/api", tags=["sensors"])
@@ -100,5 +101,43 @@ async def get_sensor_data():
                     )
                     
             return responses
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/sensors/{sensor_id}/history")
+async def get_sensor_history(sensor_id: str):
+    """Returns last 24 hours of data for a sensor"""
+    headers = {
+        "Authorization": f"Bearer {settings.HASS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    
+    # Calculate timestamp for 24 hours ago
+    timestamp = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{settings.HASS_URL}/api/history/period/{timestamp}",
+                headers=headers,
+                params={"filter_entity_id": sensor_id}
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data and len(data) > 0:
+                    history = data[0]  # Get the first array (sensor data)
+                    
+                    # Calculate min/max values
+                    values = [float(item['state']) for item in history if item['state'].replace('.', '').isdigit()]
+                    stats = {
+                        'min': min(values) if values else None,
+                        'max': max(values) if values else None,
+                        'current': values[-1] if values else None,
+                        'history': history
+                    }
+                    return stats
+                    
+            raise HTTPException(status_code=response.status_code, detail="Error fetching history")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 
