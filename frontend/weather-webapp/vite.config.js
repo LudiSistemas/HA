@@ -9,7 +9,20 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
-      },
-    },
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '/api')
+      }
+    }
   },
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
+    sourcemap: false,
+    // Ensure proper handling of dynamic imports
+    rollupOptions: {
+      output: {
+        manualChunks: undefined
+      }
+    }
+  }
 }) 

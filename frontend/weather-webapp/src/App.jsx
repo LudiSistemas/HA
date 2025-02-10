@@ -34,12 +34,14 @@ function App() {
     try {
       const response = await fetch('/api/sensors');
       if (!response.ok) {
-        throw new Error('Failed to fetch sensor data');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
       const result = await response.json();
+      console.log('Fetched data:', result); // Debug log
       setData(result);
       setError(null);
     } catch (err) {
+      console.error('Fetch error:', err); // Debug log
       setError(err.message);
     } finally {
       setLoading(false);
