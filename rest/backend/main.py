@@ -15,8 +15,9 @@ limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
     title="Rest Dashboard API",
-    docs_url=None,  # Disable Swagger UI in production
-    redoc_url=None  # Disable ReDoc in production
+    # Enable docs in development mode
+    docs_url="/api/docs" if os.getenv("ENVIRONMENT") == "development" else None,
+    redoc_url="/api/redoc" if os.getenv("ENVIRONMENT") == "development" else None,
 )
 
 # Rate limiting
