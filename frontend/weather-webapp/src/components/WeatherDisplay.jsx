@@ -1,5 +1,6 @@
 import React from 'react';
 import styled, { keyframes } from 'styled-components';
+import { sensorConfig } from '../config/sensors';
 
 const glow = keyframes`
   0% {
@@ -68,24 +69,41 @@ const ErrorMessage = styled.div`
 `;
 
 const WeatherDisplay = ({ data, error }) => {
+  const getSensorConfig = (entityId) => {
+    return sensorConfig[entityId] || {
+      name: entityId,
+      precision: 1,
+      icon: ''
+    };
+  };
+
+  const formatValue = (value, precision) => {
+    return Number(value).toFixed(precision);
+  };
+
   if (error) {
     return <ErrorMessage>{error}</ErrorMessage>;
   }
 
   return (
     <Container>
-      {data?.map((sensor) => (
-        <WeatherCard key={sensor.entity_id}>
-          <Label>{sensor.attributes.friendly_name}</Label>
-          <Value>
-            {sensor.state}
-            {sensor.attributes.unit_of_measurement}
-          </Value>
-          <LastUpdated>
-            Last updated: {new Date(sensor.last_updated).toLocaleString()}
-          </LastUpdated>
-        </WeatherCard>
-      ))}
+      {data?.map((sensor) => {
+        const config = getSensorConfig(sensor.entity_id);
+        return (
+          <WeatherCard key={sensor.entity_id}>
+            <Label>
+              {config.icon} {config.name || sensor.attributes.friendly_name}
+            </Label>
+            <Value>
+              {formatValue(sensor.state, config.precision)}
+              {sensor.attributes.unit_of_measurement}
+            </Value>
+            <LastUpdated>
+              Last updated: {new Date(sensor.last_updated).toLocaleString()}
+            </LastUpdated>
+          </WeatherCard>
+        );
+      })}
     </Container>
   );
 };
