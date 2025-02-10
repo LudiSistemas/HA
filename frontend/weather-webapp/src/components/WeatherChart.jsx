@@ -29,10 +29,19 @@ const StatValue = styled.div`
 const WeatherChart = ({ data, unit, precision }) => {
   if (!data || !data.history) return null;
 
+  // Debug log
+  console.log('Chart data:', data);
+
   const chartData = data.history.map(item => ({
     time: new Date(item.last_updated).getTime(),
     value: parseFloat(item.state)
   }));
+
+  // Verify min/max calculations
+  const values = chartData.map(item => item.value);
+  console.log('Values:', values);
+  console.log('Calculated min:', Math.min(...values));
+  console.log('Received min:', data.min);
 
   return (
     <>
@@ -46,14 +55,17 @@ const WeatherChart = ({ data, unit, precision }) => {
               tickFormatter={(time) => new Date(time).toLocaleTimeString()}
               stroke="#666"
             />
-            <YAxis stroke="#666" />
+            <YAxis 
+              stroke="#666"
+              domain={['auto', 'auto']}  // Let it calculate based on actual data
+            />
             <Tooltip
               contentStyle={{ background: '#1a1a2e', border: '1px solid #0ff' }}
               labelFormatter={(time) => new Date(time).toLocaleString()}
               formatter={(value) => [value.toFixed(precision) + unit]}
             />
-            <ReferenceLine y={data.max} stroke="#ff4444" strokeDasharray="3 3" />
             <ReferenceLine y={data.min} stroke="#4444ff" strokeDasharray="3 3" />
+            <ReferenceLine y={data.max} stroke="#ff4444" strokeDasharray="3 3" />
             <Line 
               type="monotone"
               dataKey="value"

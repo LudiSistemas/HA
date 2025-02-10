@@ -128,15 +128,28 @@ async def get_sensor_history(sensor_id: str):
                 if data and len(data) > 0:
                     history = data[0]  # Get the first array (sensor data)
                     
-                    # Calculate min/max values
-                    values = [float(item['state']) for item in history if item['state'].replace('.', '').isdigit()]
-                    stats = {
-                        'min': min(values) if values else None,
-                        'max': max(values) if values else None,
-                        'current': values[-1] if values else None,
-                        'history': history
-                    }
-                    return stats
+                    # Add debug logging
+                    print(f"Raw values: {[item['state'] for item in history]}")
+                    
+                    # More robust value filtering and conversion
+                    values = []
+                    for item in history:
+                        try:
+                            # Handle negative numbers and decimals
+                            if item['state'].replace('-', '').replace('.', '').isdigit():
+                                values.append(float(item['state']))
+                        except (ValueError, AttributeError):
+                            continue
+                    
+                    if values:
+                        stats = {
+                            'min': min(values),
+                            'max': max(values),
+                            'current': values[-1],
+                            'history': history
+                        }
+                        print(f"Calculated stats: {stats}")  # Debug log
+                        return stats
                     
             raise HTTPException(status_code=response.status_code, detail="Error fetching history")
     except Exception as e:
