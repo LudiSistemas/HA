@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import router
 from app.config import settings
 
-app = FastAPI(title="Weather Dashboard API")
+app = FastAPI(title="Rest Dashboard API")
 
 app.add_middleware(
     CORSMiddleware,
