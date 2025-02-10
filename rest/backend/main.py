@@ -1,14 +1,13 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.security import APIKeyHeader
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from app.api import router
 from app.config import settings
 import time
+import os
 
 # Create limiter instance
 limiter = Limiter(key_func=get_remote_address)
@@ -23,44 +22,32 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Security middlewares
+# Basic CORS - Nginx will handle the rest
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=["*"],  # Nginx will handle actual CORS
     allow_credentials=True,
-    allow_methods=["GET"],  # Restrict to GET only since we're only reading data
+    allow_methods=["GET"],
     allow_headers=["*"],
-    max_age=3600,  # Cache preflight requests for 1 hour
 )
-
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=["your-domain.com", "localhost", "localhost:8000"]  # Add your domain
-)
-
-# Security headers middleware
-@app.middleware("http")
-async def add_security_headers(request: Request, call_next):
-    response = await call_next(request)
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    response.headers["Server"] = ""  # Remove server header
-    return response
 
 # Request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+    # Get real IP from Nginx headers
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    real_ip = forwarded_for.split(",")[0] if forwarded_for else request.client.host
+    
     start_time = time.time()
     response = await call_next(request)
     duration = time.time() - start_time
-    print(f"{request.method} {request.url.path} - {response.status_code} - {duration:.2f}s")
+    
+    print(f"{real_ip} - {request.method} {request.url.path} - {response.status_code} - {duration:.2f}s")
     return response
 
-# Global rate limit
+# Global rate limit - using X-Forwarded-For for proper IP behind proxy
 @app.middleware("http")
-@limiter.limit("60/minute")  # Adjust rate limit as needed
+@limiter.limit("60/minute")
 async def global_rate_limit(request: Request, call_next):
     response = await call_next(request)
     return response
@@ -70,18 +57,22 @@ async def global_rate_limit(request: Request, call_next):
 async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error"}  # Don't expose error details in production
+        content={"detail": "Internal server error"}
     )
 
 app.include_router(router)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "main:app", 
-        host="0.0.0.0", 
-        port=8000, 
-        reload=False,  # Disable reload in production
-        ssl_keyfile="key.pem",  # Add SSL certificate
-        ssl_certfile="cert.pem"
-    ) 
+    
+    is_dev = os.getenv("ENVIRONMENT", "development") == "development"
+    
+    # Basic configuration - no SSL since Nginx handles it
+    config = {
+        "app": "main:app",
+        "host": "127.0.0.1",  # Only listen on localhost since Nginx proxies
+        "port": 8000,
+        "reload": is_dev
+    }
+    
+    uvicorn.run(**config) 
