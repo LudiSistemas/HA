@@ -41,7 +41,7 @@ function App() {
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
-        },
+        }
       });
       
       console.log('Response status:', response.status);
