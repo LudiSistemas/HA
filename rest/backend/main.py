@@ -14,10 +14,12 @@ import logging
 limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
-    title="Rest Dashboard API",
-    # Enable docs in development mode
-    docs_url="/api/docs" if os.getenv("ENVIRONMENT") == "development" else None,
-    redoc_url="/api/redoc" if os.getenv("ENVIRONMENT") == "development" else None,
+    title="Home Assistant Sensor Proxy",
+    description="API for proxying Home Assistant sensor data",
+    version="1.0.0",
+    docs_url="/api/docs",  # Always enable docs for now
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json"  # Important for Swagger to work
 )
 
 # Rate limiting

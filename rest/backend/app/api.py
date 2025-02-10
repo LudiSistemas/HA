@@ -14,12 +14,18 @@ async def ping():
     return {"status": "ok", "message": "API is running"}
 
 # Debug route to see what sensors are configured
-@router.get("/config")
+@router.get("/config", tags=["system"])
 async def get_config():
     """Returns current configuration (excluding sensitive data)"""
+    # Convert string to list if needed (handles both formats)
+    sensors = settings.SENSOR_IDS
+    if isinstance(sensors, str):
+        # Handle comma-separated string format
+        sensors = [s.strip() for s in sensors.split(',')]
+    
     return {
-        "sensors": settings.SENSOR_IDS,
-        "hass_url": settings.HASS_URL
+        "sensors": sensors,
+        "hass_url": settings.HASS_URL.replace("http://192.168.", "http://homeassistant.")  # Sanitize internal URL
     }
 
 # Response model for better OpenAPI documentation
@@ -40,13 +46,15 @@ class SensorData(BaseModel):
             "content": {
                 "application/json": {
                     "example": [{
-                        "entity_id": "sensor.temperature_living_room",
-                        "state": "21.5",
+                        "entity_id": "sensor.ws2900_v2_02_03_outdoor_temperature",
+                        "state": "-3.8",
                         "attributes": {
-                            "friendly_name": "Living Room Temperature",
-                            "unit_of_measurement": "°C"
+                            "state_class": "measurement",
+                            "unit_of_measurement": "°C",
+                            "device_class": "temperature",
+                            "friendly_name": "WS2900_V2.02.03 Outdoor Temperature"
                         },
-                        "last_updated": "2024-02-10T18:26:27+00:00"
+                        "last_updated": "2025-02-10T18:36:52.245418+00:00"
                     }]
                 }
             }
