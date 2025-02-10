@@ -1,12 +1,60 @@
 from fastapi import APIRouter, HTTPException
+from typing import List
 import httpx
+from pydantic import BaseModel
 from app.config import settings
 
 # Create router with prefix to match nginx location
-router = APIRouter(prefix="/api")
+router = APIRouter(prefix="/api", tags=["sensors"])
 
-@router.get("/sensors")
+# Response model for better OpenAPI documentation
+class SensorData(BaseModel):
+    entity_id: str
+    state: str
+    attributes: dict
+    last_updated: str
+
+@router.get(
+    "/sensors",
+    response_model=List[SensorData],
+    summary="Get Sensor Data",
+    description="Retrieves the current state of all configured sensors from Home Assistant",
+    responses={
+        200: {
+            "description": "Successfully retrieved sensor data",
+            "content": {
+                "application/json": {
+                    "example": [{
+                        "entity_id": "sensor.temperature_living_room",
+                        "state": "21.5",
+                        "attributes": {
+                            "friendly_name": "Living Room Temperature",
+                            "unit_of_measurement": "°C"
+                        },
+                        "last_updated": "2024-02-10T18:26:27+00:00"
+                    }]
+                }
+            }
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Error fetching sensor data"}
+                }
+            }
+        }
+    }
+)
 async def get_sensor_data():
+    """
+    Fetches current sensor data from Home Assistant.
+    
+    Returns a list of sensor states including:
+    - Current value
+    - Sensor attributes
+    - Last update timestamp
+    """
     headers = {
         "Authorization": f"Bearer {settings.HASS_TOKEN}",
         "Content-Type": "application/json",
@@ -23,8 +71,10 @@ async def get_sensor_data():
                 if response.status_code == 200:
                     responses.append(response.json())
                 else:
-                    raise HTTPException(status_code=response.status_code, 
-                                     detail=f"Error fetching sensor {sensor_id}")
+                    raise HTTPException(
+                        status_code=response.status_code, 
+                        detail=f"Error fetching sensor {sensor_id}"
+                    )
                     
             return responses
     except Exception as e:
