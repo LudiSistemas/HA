@@ -99,7 +99,7 @@ const WeatherDisplay = ({ data, error }) => {
               {sensor.attributes.unit_of_measurement}
             </Value>
             <LastUpdated>
-              Last updated: {new Date(sensor.last_updated).toLocaleString()}
+              Zadnji put ažurirano: {new Date(sensor.last_updated).toLocaleString()}
             </LastUpdated>
           </WeatherCard>
         );
