@@ -1,3 +1,6 @@
+# Rate limiting configuration (must be in http context)
+limit_req_zone $http_cf_connecting_ip zone=api_limit:10m rate=60r/m;
+
 server {
     listen 80;
     server_name your-domain.com;
@@ -43,7 +46,6 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 
-    limit_req_zone $http_cf_connecting_ip zone=api_limit:10m rate=60r/m;
     location /api/ {
         limit_req zone=api_limit burst=20 nodelay;
         proxy_pass http://127.0.0.1:8000;
