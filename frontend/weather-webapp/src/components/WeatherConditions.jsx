@@ -284,55 +284,107 @@ const getWeatherCondition = (temp, humidity, pressure, windSpeed, windGust, rain
   return conditions.join(' • ');
 };
 
-const getPressureTrend = (pressureHistory, currentData) => {
-  if (!pressureHistory?.history || pressureHistory.history.length < 2) return null;
+const analyzePressurePeriods = (history) => {
+  if (!history || history.length < 2) return null;
 
-  const recent = pressureHistory.history.slice(-12);
-  const pressureChange = recent[recent.length - 1].state - recent[0].state;
-  const changeRate = pressureChange / (recent.length - 1);
-  const currentPressure = parseFloat(recent[recent.length - 1].state);
+  // Get timestamps for different periods
+  const now = new Date();
+  const oneHourAgo = new Date(now - 3600000);
+  const threeHoursAgo = new Date(now - 10800000);
+  const sixHoursAgo = new Date(now - 21600000);
+
+  // Get pressure values for each period
+  const currentPressure = parseFloat(history[history.length - 1].state);
   
-  const predictions = [];
+  const oneHourData = history.find(item => new Date(item.last_updated) >= oneHourAgo);
+  const threeHourData = history.find(item => new Date(item.last_updated) >= threeHoursAgo);
+  const sixHourData = history.find(item => new Date(item.last_updated) >= sixHoursAgo);
+
+  // Calculate changes
+  const changes = {
+    oneHour: oneHourData ? currentPressure - parseFloat(oneHourData.state) : null,
+    threeHour: threeHourData ? currentPressure - parseFloat(threeHourData.state) : null,
+    sixHour: sixHourData ? currentPressure - parseFloat(sixHourData.state) : null
+  };
+
+  return {
+    current: currentPressure,
+    changes,
+    trend: getTrendDescription(changes)
+  };
+};
+
+const getTrendDescription = (changes) => {
+  const { oneHour, threeHour, sixHour } = changes;
   
-  // More detailed pressure trend analysis
-  if (Math.abs(changeRate) > 0.5) {
-    if (changeRate > 0) {
-      predictions.push({
-        message: '🌤️ Brzi rast pritiska - očekuje se stabilizacija vremena',
-        severity: 'low',
-        priority: 1
-      });
-    } else {
-      predictions.push({
-        message: '🌧️ Brzi pad pritiska - moguće pogoršanje vremena',
-        severity: 'high',
+  // Significant pressure changes (hPa per hour)
+  const RAPID_CHANGE = 0.5;  // > 0.5 hPa/h is considered rapid
+  const MODERATE_CHANGE = 0.2;  // > 0.2 hPa/h is considered moderate
+
+  let trend = [];
+
+  // Analyze one hour change
+  if (oneHour !== null) {
+    const hourlyRate = oneHour;
+    if (Math.abs(hourlyRate) >= RAPID_CHANGE) {
+      trend.push({
+        message: hourlyRate > 0
+          ? '🌤️ Nagli rast pritiska u poslednjem satu - brzo poboljšanje vremena'
+          : '🌧️ Nagli pad pritiska u poslednjem satu - moguće brzo pogoršanje',
+        severity: hourlyRate > 0 ? 'low' : 'high',
         priority: 1
       });
     }
-  } else if (Math.abs(changeRate) > 0.2) {
-    if (changeRate > 0) {
-      predictions.push({
-        message: '🌥️ Postepeni rast pritiska - vreme se poboljšava',
-        severity: 'low',
-        priority: 2
-      });
-    } else {
-      predictions.push({
-        message: '🌦️ Postepeni pad pritiska - moguća promena vremena',
-        severity: 'medium',
+  }
+
+  // Analyze three hour trend
+  if (threeHour !== null) {
+    const threeHourRate = threeHour / 3;
+    if (Math.abs(threeHourRate) >= MODERATE_CHANGE) {
+      trend.push({
+        message: threeHourRate > 0
+          ? '🌥️ Postojan rast pritiska u poslednja 3 sata'
+          : '🌦️ Postojan pad pritiska u poslednja 3 sata',
+        severity: threeHourRate > 0 ? 'low' : 'medium',
         priority: 2
       });
     }
   }
+
+  // Analyze six hour trend
+  if (sixHour !== null) {
+    const sixHourRate = sixHour / 6;
+    if (Math.abs(sixHourRate) >= MODERATE_CHANGE) {
+      trend.push({
+        message: sixHourRate > 0
+          ? '☀️ Dugotrajan rast pritiska - stabilizacija vremena'
+          : '🌧️ Dugotrajan pad pritiska - razvoj vremenske nepogode',
+        severity: sixHourRate > 0 ? 'low' : 'high',
+        priority: sixHourRate > 0 ? 3 : 1
+      });
+    }
+  }
+
+  return trend;
+};
+
+// Update getPressureTrend function to use the new analysis
+const getPressureTrend = (pressureHistory, currentData) => {
+  if (!pressureHistory?.history || pressureHistory.history.length < 2) return null;
+
+  const analysis = analyzePressurePeriods(pressureHistory.history);
+  if (!analysis) return null;
+
+  const predictions = [...analysis.trend];
   
-  // Pressure level warnings
-  if (currentPressure < 1000) {
+  // Add existing pressure level warnings
+  if (analysis.current < 1000) {
     predictions.push({
       message: '🌧️ Nizak pritisak - povećana verovatnoća padavina',
       severity: 'medium',
       priority: 2
     });
-  } else if (currentPressure > 1020) {
+  } else if (analysis.current > 1020) {
     predictions.push({
       message: '☀️ Visok pritisak - stabilno vreme',
       severity: 'low',
