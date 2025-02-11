@@ -79,6 +79,12 @@ const DAY_NIGHT_NORMS = {
     SUMMER: { temp: { min: 20, max: 32 }, humidity: { min: 45, max: 65 } },
     AUTUMN: { temp: { min: 10, max: 20 }, humidity: { min: 60, max: 80 } }
   },
+  EVENING: {
+    WINTER: { temp: { min: -1, max: 5 }, humidity: { min: 70, max: 88 } },
+    SPRING: { temp: { min: 10, max: 18 }, humidity: { min: 60, max: 80 } },
+    SUMMER: { temp: { min: 18, max: 28 }, humidity: { min: 50, max: 70 } },
+    AUTUMN: { temp: { min: 8, max: 17 }, humidity: { min: 65, max: 83 } }
+  },
   NIGHT: {
     WINTER: { temp: { min: -2, max: 4 }, humidity: { min: 75, max: 90 } },
     SPRING: { temp: { min: 8, max: 15 }, humidity: { min: 65, max: 85 } },
@@ -116,6 +122,13 @@ const getSunriseSunset = () => {
   }
 };
 
+const getTimeCategory = () => {
+  const hours = new Date().getHours();
+  if (hours >= 18 && hours < 22) return 'EVENING';
+  if (hours >= 7 && hours < 18) return 'DAY';
+  return 'NIGHT';
+};
+
 const isDaytime = () => {
   const now = new Date();
   const currentTime = now.toLocaleTimeString('en-US', { hour12: false });
@@ -139,10 +152,11 @@ const getTimeOfDay = () => {
 const getSeasonalPrediction = (temp, humidity, pressure, season) => {
   const predictions = [];
   const timeOfDay = getTimeOfDay();
-  const dayNightNorms = isDaytime() ? DAY_NIGHT_NORMS.DAY[season] : DAY_NIGHT_NORMS.NIGHT[season];
+  const timeCategory = getTimeCategory();
+  const timeNorms = DAY_NIGHT_NORMS[timeCategory][season];
 
   // Temperature anomalies for time of day
-  const tempDiff = temp - (dayNightNorms.temp.max + dayNightNorms.temp.min) / 2;
+  const tempDiff = temp - (timeNorms.temp.max + timeNorms.temp.min) / 2;
   if (Math.abs(tempDiff) > 3) {
     predictions.push({
       message: tempDiff > 0 
@@ -155,7 +169,7 @@ const getSeasonalPrediction = (temp, humidity, pressure, season) => {
 
   // Night-specific predictions
   if (!isDaytime()) {
-    const tempDrop = temp - dayNightNorms.temp.max;
+    const tempDrop = temp - timeNorms.temp.max;
     if (tempDrop < -8) {
       predictions.push({
         message: '❄️ Značajan noćni pad temperature',
@@ -164,7 +178,7 @@ const getSeasonalPrediction = (temp, humidity, pressure, season) => {
       });
     }
     
-    if (humidity > dayNightNorms.humidity.max) {
+    if (humidity > timeNorms.humidity.max) {
       predictions.push({
         message: '💧 Povećana vlažnost tokom noći - moguća rosa ili magla',
         severity: 'low',
@@ -174,7 +188,7 @@ const getSeasonalPrediction = (temp, humidity, pressure, season) => {
   }
 
   // Day-specific predictions
-  if (isDaytime() && season === 'SUMMER' && temp > dayNightNorms.temp.max) {
+  if (isDaytime() && season === 'SUMMER' && temp > timeNorms.temp.max) {
     predictions.push({
       message: '☀️ Visoke dnevne temperature - preporučuje se izbegavanje sunca',
       severity: 'high',
@@ -190,16 +204,17 @@ const getWeatherCondition = (temp, humidity, pressure, windSpeed, windGust, rain
 
   const norms = SEASONAL_NORMS[season];
   const timeOfDay = getTimeOfDay();
-  const dayNightNorms = isDaytime() ? DAY_NIGHT_NORMS.DAY[season] : DAY_NIGHT_NORMS.NIGHT[season];
+  const timeCategory = getTimeCategory();
+  const timeNorms = DAY_NIGHT_NORMS[timeCategory][season];
   let conditions = [];
   
   // Time of day indicator
   conditions.push(isDaytime() ? '☀️' : '🌙');
   
   // Temperature conditions with day/night context
-  if (temp < dayNightNorms.temp.min) {
+  if (temp < timeNorms.temp.min) {
     conditions.push(`❄️ Hladno za ${timeOfDay}`);
-  } else if (temp > dayNightNorms.temp.max) {
+  } else if (temp > timeNorms.temp.max) {
     conditions.push(`🌡️ Toplo za ${timeOfDay}`);
   } else {
     conditions.push('🌡️ Prijatno');
