@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine } from 'recharts';
 import styled from 'styled-components';
 
@@ -83,10 +83,15 @@ const TimeRange = styled.div`
 const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
   const [timeOffset, setTimeOffset] = useState(0);
   const [error, setError] = useState(null);
+  const [chartData, setChartData] = useState(data);
   
-  const MAX_OFFSET = 30; // Maximum number of days we can go back
+  const MAX_OFFSET = 30;
 
-  if (!data?.history) return null;
+  useEffect(() => {
+    setChartData(data);
+  }, [data]);
+
+  if (!chartData?.history) return null;
 
   const formatValue = (value) => Number(value).toFixed(precision);
 
@@ -104,9 +109,7 @@ const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
       
       if (response.ok) {
         const newData = await response.json();
-        data.history = newData.history;
-        data.min = newData.min;
-        data.max = newData.max;
+        setChartData(newData);
       } else {
         const errorData = await response.json();
         setError(errorData.detail || 'Greška pri učitavanju podataka');
@@ -136,14 +139,14 @@ const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
   startTime.setDate(startTime.getDate() - timeOffset - 1);
 
   // Process data for chart
-  let chartData = data.history.map(item => ({
+  let processedData = chartData.history.map(item => ({
     time: new Date(item.last_updated).getTime(),
     value: parseFloat(item.state)
   }));
 
   // Special handling for rain data
   if (sensorType === 'rain') {
-    chartData = chartData.filter((item, index, arr) => {
+    processedData = processedData.filter((item, index, arr) => {
       const value = item.value;
       const prevValue = index > 0 ? arr[index - 1].value : 0;
       return value > 0 || prevValue > 0;
@@ -151,7 +154,7 @@ const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
   }
 
   // Get time domain to remove gaps
-  const timeRange = chartData.reduce(
+  const timeRange = processedData.reduce(
     (acc, item) => ({
       min: Math.min(acc.min, item.time),
       max: Math.max(acc.max, item.time),
@@ -164,7 +167,7 @@ const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
       <ChartContainer>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart 
-            data={chartData}
+            data={processedData}
             margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
           >
             <XAxis
@@ -190,8 +193,8 @@ const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
               labelFormatter={(time) => new Date(time).toLocaleString()}
               formatter={(value) => [value.toFixed(precision) + unit]}
             />
-            <ReferenceLine y={data.min} stroke="#4444ff" strokeDasharray="3 3" />
-            <ReferenceLine y={data.max} stroke="#ff4444" strokeDasharray="3 3" />
+            <ReferenceLine y={chartData.min} stroke="#4444ff" strokeDasharray="3 3" />
+            <ReferenceLine y={chartData.max} stroke="#ff4444" strokeDasharray="3 3" />
             <Line
               type="monotone"
               dataKey="value"
@@ -229,11 +232,11 @@ const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
       <StatsContainer>
         <StatItem>
           <div>Minimum</div>
-          <StatValue>{formatValue(data.min)}{unit}</StatValue>
+          <StatValue>{formatValue(chartData.min)}{unit}</StatValue>
         </StatItem>
         <StatItem>
           <div>Maximum</div>
-          <StatValue>{formatValue(data.max)}{unit}</StatValue>
+          <StatValue>{formatValue(chartData.max)}{unit}</StatValue>
         </StatItem>
       </StatsContainer>
     </>
