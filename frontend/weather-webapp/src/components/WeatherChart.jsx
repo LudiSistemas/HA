@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine } from 'recharts';
 import styled from 'styled-components';
 
@@ -46,10 +46,85 @@ const StatValue = styled.div`
   margin-top: 2px;
 `;
 
-const WeatherChart = ({ data, unit, precision, sensorType }) => {
+const NavigationButtons = styled.div`
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+`;
+
+const NavButton = styled.button`
+  background: rgba(0, 255, 255, 0.1);
+  border: 1px solid #0ff;
+  color: #0ff;
+  padding: 5px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: 'Roboto Mono', monospace;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: rgba(0, 255, 255, 0.2);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+const TimeRange = styled.div`
+  color: #888;
+  text-align: center;
+  margin-top: 5px;
+  font-size: 0.9em;
+`;
+
+const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
+  const [timeOffset, setTimeOffset] = useState(0); // Offset in days
+
   if (!data?.history) return null;
 
   const formatValue = (value) => Number(value).toFixed(precision);
+
+  const fetchHistoricalData = async (offset) => {
+    try {
+      const timestamp = new Date();
+      timestamp.setDate(timestamp.getDate() - offset);
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/sensors/${entityId}/history?offset=${offset}`
+      );
+      
+      if (response.ok) {
+        const newData = await response.json();
+        // Update chart data
+        data.history = newData.history;
+        data.min = newData.min;
+        data.max = newData.max;
+      }
+    } catch (error) {
+      console.error('Error fetching historical data:', error);
+    }
+  };
+
+  const handlePrevious = async () => {
+    const newOffset = timeOffset + 1;
+    setTimeOffset(newOffset);
+    await fetchHistoricalData(newOffset);
+  };
+
+  const handleNext = async () => {
+    const newOffset = timeOffset - 1;
+    setTimeOffset(newOffset);
+    await fetchHistoricalData(newOffset);
+  };
+
+  // Calculate time range for display
+  const endTime = new Date();
+  const startTime = new Date();
+  endTime.setDate(endTime.getDate() - timeOffset);
+  startTime.setDate(startTime.getDate() - timeOffset - 1);
 
   // Process data for chart
   let chartData = data.history.map(item => ({
@@ -119,6 +194,21 @@ const WeatherChart = ({ data, unit, precision, sensorType }) => {
           </LineChart>
         </ResponsiveContainer>
       </ChartContainer>
+      <NavigationButtons>
+        <NavButton onClick={handlePrevious}>
+          ◀ 24h ranije
+        </NavButton>
+        <NavButton 
+          onClick={handleNext} 
+          disabled={timeOffset === 0}
+        >
+          24h kasnije ▶
+        </NavButton>
+      </NavigationButtons>
+      <TimeRange>
+        {startTime.toLocaleDateString()} {startTime.toLocaleTimeString().slice(0, 5)} - 
+        {endTime.toLocaleDateString()} {endTime.toLocaleTimeString().slice(0, 5)}
+      </TimeRange>
       <StatsContainer>
         <StatItem>
           <div>Minimum</div>

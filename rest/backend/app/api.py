@@ -369,8 +369,8 @@ async def get_sensor_data(request: Request):
         )
 
 @router.get("/sensors/{sensor_id}/history")
-async def get_sensor_history(sensor_id: str, request: Request):
-    """Returns last 24 hours of data for a sensor"""
+async def get_sensor_history(sensor_id: str, request: Request, offset: int = 0):
+    """Returns 24 hours of data for a sensor with specified offset in days"""
     update_analytics(request)
     analytics_data['sensor_requests'][sensor_id] += 1
     headers = {
@@ -378,30 +378,29 @@ async def get_sensor_history(sensor_id: str, request: Request):
         "Content-Type": "application/json",
     }
     
-    # Calculate timestamp for 24 hours ago
-    timestamp = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+    # Calculate timestamp for 24 hours period with offset
+    end_time = datetime.utcnow() - timedelta(days=offset)
+    start_time = end_time - timedelta(hours=24)
     
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{settings.HASS_URL}/api/history/period/{timestamp}",
+                f"{settings.HASS_URL}/api/history/period/{start_time.isoformat()}",
                 headers=headers,
-                params={"filter_entity_id": sensor_id}
+                params={
+                    "filter_entity_id": sensor_id,
+                    "end_time": end_time.isoformat()
+                }
             )
             
             if response.status_code == 200:
                 data = response.json()
                 if data and len(data) > 0:
-                    history = data[0]  # Get the first array (sensor data)
+                    history = data[0]
                     
-                    # Add debug logging
-                    print(f"Raw values: {[item['state'] for item in history]}")
-                    
-                    # More robust value filtering and conversion
                     values = []
                     for item in history:
                         try:
-                            # Handle negative numbers and decimals
                             if item['state'].replace('-', '').replace('.', '').isdigit():
                                 values.append(float(item['state']))
                         except (ValueError, AttributeError):
@@ -412,9 +411,10 @@ async def get_sensor_history(sensor_id: str, request: Request):
                             'min': min(values),
                             'max': max(values),
                             'current': values[-1],
-                            'history': history
+                            'history': history,
+                            'start_time': start_time.isoformat(),
+                            'end_time': end_time.isoformat()
                         }
-                        print(f"Calculated stats: {stats}")  # Debug log
                         return stats
                     
             raise HTTPException(status_code=response.status_code, detail="Error fetching history")
