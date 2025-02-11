@@ -83,6 +83,9 @@ class SensorData(BaseModel):
 def parse_sensor_ids(sensor_ids):
     """Parse sensor IDs from various formats"""
     if isinstance(sensor_ids, list):
+        # If it's a list with a single string containing commas, split it
+        if len(sensor_ids) == 1 and ',' in sensor_ids[0]:
+            return [s.strip() for s in sensor_ids[0].split(',')]
         return sensor_ids
     
     # Remove square brackets and extra quotes if present
@@ -155,12 +158,15 @@ async def get_sensor_data():
             
             # Parse sensor IDs using the new helper function
             sensor_ids = parse_sensor_ids(settings.SENSOR_IDS)
-            print(f"Fetching data for sensors: {sensor_ids}")  # Debug log
+            print(f"Fetching data for sensors (parsed): {sensor_ids}")  # Debug log
             
             for sensor_id in sensor_ids:
                 try:
+                    url = f"{settings.HASS_URL}/api/states/{sensor_id}"
+                    print(f"Fetching: {url}")  # Debug log
+                    
                     response = await client.get(
-                        f"{settings.HASS_URL}/api/states/{sensor_id}",
+                        url,
                         headers=headers,
                         timeout=10.0
                     )
