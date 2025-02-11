@@ -385,6 +385,87 @@ const getWindPrediction = (windSpeed, windGust, windDir) => {
   return predictions;
 };
 
+const getUVPrediction = (uvIndex) => {
+  if (!uvIndex) return null;
+  
+  const uv = parseFloat(uvIndex);
+  const predictions = [];
+
+  if (uv >= 11) {
+    predictions.push({
+      message: '🌞 EKSTREMNO UV zračenje! Obavezno izbegavati sunce od 10-16h',
+      severity: 'high',
+      priority: 1
+    });
+  } else if (uv >= 8) {
+    predictions.push({
+      message: '🌞 Vrlo visok UV indeks! Koristiti zaštitu i izbegavati sunce od 11-15h',
+      severity: 'high',
+      priority: 1
+    });
+  } else if (uv >= 6) {
+    predictions.push({
+      message: '🌞 Visok UV indeks! Potrebna zaštita od sunca',
+      severity: 'medium',
+      priority: 2
+    });
+  }
+
+  return predictions;
+};
+
+const getHeatWavePrediction = (temp, humidity, season) => {
+  if (!temp || !humidity) return null;
+  
+  const predictions = [];
+  const heatIndex = calculateHeatIndex(temp, humidity);
+
+  // Toplotni talas - više uzastopnih dana sa visokom temperaturom
+  if (season === 'SUMMER' && temp >= 35) {
+    predictions.push({
+      message: '🌡️ UPOZORENJE: Ekstremno visoke temperature! Izbegavati napor i direktno sunce',
+      severity: 'high',
+      priority: 1
+    });
+  } else if (season === 'SUMMER' && temp >= 32) {
+    predictions.push({
+      message: '🌡️ Toplotni talas - preporučuje se izbegavanje fizičkih aktivnosti',
+      severity: 'high',
+      priority: 1
+    });
+  }
+
+  // Osećaj temperature (heat index)
+  if (heatIndex > 40) {
+    predictions.push({
+      message: '🌡️ Opasno visok osećaj temperature! Moguć toplotni udar',
+      severity: 'high',
+      priority: 1
+    });
+  } else if (heatIndex > 35) {
+    predictions.push({
+      message: '🌡️ Povišen osećaj temperature - potreban oprez',
+      severity: 'medium',
+      priority: 2
+    });
+  }
+
+  return predictions;
+};
+
+// Pomoćna funkcija za računanje heat index-a
+const calculateHeatIndex = (temp, humidity) => {
+  // Pojednostavljena formula za heat index
+  if (temp < 27) return temp;
+  
+  const t = temp;
+  const h = humidity;
+  
+  return -8.784695 + 1.61139411 * t + 2.338549 * h - 0.14611605 * t * h - 
+         0.012308094 * t * t - 0.016424828 * h * h + 0.002211732 * t * t * h +
+         0.00072546 * t * h * h - 0.000003582 * t * t * h * h;
+};
+
 const Header = styled.div`
   color: #0ff;
   font-size: 1.3em;
@@ -435,10 +516,21 @@ const WeatherConditions = ({ currentData, pressureHistory }) => {
     currentSeason
   );
 
+  const uvIndex = currentData.find(s => s.entity_id.includes('uv_index'))?.state;
+  
+  const uvPredictions = getUVPrediction(uvIndex);
+  const heatPredictions = getHeatWavePrediction(
+    parseFloat(temp),
+    parseFloat(humidity),
+    currentSeason
+  );
+
   const allPredictions = [
     ...(pressurePredictions || []),
     ...(windPredictions || []),
-    ...(seasonalPredictions || [])
+    ...(seasonalPredictions || []),
+    ...(uvPredictions || []),
+    ...(heatPredictions || [])
   ].sort((a, b) => a.priority - b.priority);
 
   if (!currentCondition) return null;
