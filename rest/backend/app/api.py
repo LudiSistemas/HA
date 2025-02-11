@@ -8,6 +8,7 @@ import logging
 from collections import defaultdict
 from ipaddress import ip_address
 import time
+from math import exp
 
 # Get the FastAPI logger
 logger = logging.getLogger("main")
@@ -165,6 +166,30 @@ def parse_sensor_ids(sensor_ids):
     cleaned = sensor_ids.strip('[]"\' ')
     return [s.strip() for s in cleaned.split(',')]
 
+def calculate_relative_pressure(absolute_pressure: float, altitude: float, temperature: float) -> float:
+    """
+    Calculate relative (sea level) pressure using the barometric formula
+    
+    Parameters:
+    - absolute_pressure: Pressure in hPa
+    - altitude: Altitude in meters
+    - temperature: Temperature in Celsius
+    
+    Returns:
+    - Relative pressure in hPa
+    """
+    # Constants
+    g = 9.80665  # Gravitational acceleration (m/s^2)
+    R = 287.05   # Gas constant for dry air (J/(kg·K))
+    
+    # Convert temperature to Kelvin
+    T = temperature + 273.15
+    
+    # Calculate relative pressure
+    relative_pressure = absolute_pressure * exp((g * altitude) / (R * T))
+    
+    return round(relative_pressure, 1)
+
 @router.get(
     "/sensors",
     response_model=List[SensorData],
@@ -207,6 +232,25 @@ async def get_sensor_data(request: Request):
                         try:
                             validated_data = SensorData(**sensor_data)
                             if validated_data.validate_state():
+                                # If this is absolute pressure, calculate relative pressure
+                                if 'absolute_pressure' in sensor_id:
+                                    # Get temperature for calculation
+                                    temp_sensor = next(
+                                        (s for s in responses if 'temperature' in s['entity_id']),
+                                        None
+                                    )
+                                    temp = float(temp_sensor['state']) if temp_sensor else 15  # default temp if not found
+                                    
+                                    abs_pressure = float(sensor_data['state'])
+                                    rel_pressure = calculate_relative_pressure(
+                                        abs_pressure,
+                                        float(settings.STATION_ALTITUDE),
+                                        temp
+                                    )
+                                    
+                                    # Add calculated relative pressure to attributes
+                                    sensor_data['attributes']['relative_pressure'] = rel_pressure
+                                
                                 responses.append(sensor_data)
                             else:
                                 print(f"Invalid state value for sensor {sensor_id}: {sensor_data['state']}")

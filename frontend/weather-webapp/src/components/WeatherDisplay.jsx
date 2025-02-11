@@ -123,7 +123,14 @@ const WeatherDisplay = ({ data, error }) => {
   }, [data]);
 
   const renderValue = (sensor, config) => {
-    const value = formatValue(sensor.state, config.precision);
+    let value = sensor.state;
+    
+    // Use calculated relative pressure if available
+    if (sensor.entity_id.includes('absolute_pressure') && sensor.attributes.relative_pressure) {
+      value = sensor.attributes.relative_pressure;
+    }
+    
+    value = formatValue(value, config.precision);
 
     if (sensor.entity_id === 'sensor.ws2900_v2_02_03_wind_direction') {
       const speedSensor = data.find(s => s.entity_id === 'sensor.ws2900_v2_02_03_wind_speed');

@@ -60,5 +60,11 @@ export const sensorConfig = {
     icon: '🌧️',
     precision: 1,
     unit: 'mm/h'
+  },
+  'sensor.ws2900_v2_02_03_absolute_pressure': {
+    name: 'Atmosferski pritisak',
+    icon: '🌪️',
+    precision: 0,
+    description: 'Prikazan kao relativni pritisak (na nivou mora)'
   }
 }; 
