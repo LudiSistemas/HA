@@ -10,7 +10,7 @@ export const sensorConfig = {
     icon: '🌡️',
     precision: 1
   },
-  'sensor.ws2900_v2_02_03_absolute_pressure': {
+  'sensor.ws2900_v2_02_03_relative_pressure': {
     name: 'Atmosferski pritisak',
     icon: '🌪️',
     precision: 0

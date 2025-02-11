@@ -169,7 +169,7 @@ const WeatherDisplay = ({ data, error }) => {
         <WeatherCard style={{ order: -1 }}>
           <WeatherConditions 
             currentData={data}
-            pressureHistory={historicalData['sensor.ws2900_v2_02_03_absolute_pressure']}
+            pressureHistory={historicalData['sensor.ws2900_v2_02_03_relative_pressure']}
           />
         </WeatherCard>
       )}
