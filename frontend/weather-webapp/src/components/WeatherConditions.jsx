@@ -225,9 +225,9 @@ const getWeatherCondition = (temp, humidity, pressure, windSpeed, windGust, rain
     else conditions.push('⛈️ Jaka kiša');
   }
   
-  // Seasonal specific conditions
-  if (season === 'WINTER' && temp <= 0 && humidity > 80) {
-    conditions.push('🌨️ Moguć sneg');
+  // Seasonal specific conditions - update snow prediction logic
+  if (season === 'WINTER' && temp <= 0 && humidity > 80 && pressure < 1015) {
+    conditions.push('🌨️ Moguć sneg');  // Only if we have right pressure conditions too
   }
   
   if (season === 'SUMMER' && temp > 30 && humidity > 60) {
@@ -275,6 +275,16 @@ const getPressureTrend = (pressureHistory) => {
     predictions.push({
       message: '☀️ Visok pritisak - stabilno vreme',
       severity: 'low',
+      priority: 2
+    });
+  }
+
+  // Add snow-specific pressure prediction
+  const currentSeason = getCurrentSeason();
+  if (currentSeason === 'WINTER' && currentPressure < 1015 && temp <= 0) {
+    predictions.push({
+      message: '🌨️ Postoje uslovi za snežne padavine',
+      severity: 'medium',
       priority: 2
     });
   }
