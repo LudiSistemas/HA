@@ -397,7 +397,7 @@ async def get_sensor_history(sensor_id: str, request: Request, offset: int = 0):
                 params={
                     "filter_entity_id": sensor_id,
                     "end_time": end_time_iso,
-                    "minimal_response": True
+                    "minimal_response": False  # Changed to get full response with timestamps
                 }
             )
             
@@ -413,6 +413,9 @@ async def get_sensor_history(sensor_id: str, request: Request, offset: int = 0):
                         try:
                             if item['state'].replace('-', '').replace('.', '').isdigit():
                                 value = float(item['state'])
+                                # Ensure we have last_updated field
+                                if 'last_updated' not in item:
+                                    item['last_updated'] = item.get('last_changed')
                                 values.append(value)
                                 filtered_history.append(item)
                         except (ValueError, AttributeError):
@@ -427,6 +430,8 @@ async def get_sensor_history(sensor_id: str, request: Request, offset: int = 0):
                             'start_time': start_time_iso,
                             'end_time': end_time_iso
                         }
+                        # Log the first few items to verify structure
+                        logger.info(f"Sample history items: {filtered_history[:2]}")
                         return stats
                     
                 logger.warning(f"No valid data found for {sensor_id} in the specified period")

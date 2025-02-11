@@ -150,15 +150,24 @@ const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
 
   // Process data for chart
   let processedData = chartData.history.map(item => {
-    console.log('Processing item:', item);
+    const timestamp = item.last_updated || item.last_changed;
+    if (!timestamp) {
+      console.error('Missing timestamp for item:', item);
+      return null;
+    }
     return {
-      time: new Date(item.last_updated).getTime(),
+      time: new Date(timestamp).getTime(),
       value: parseFloat(item.state)
     };
-  });
+  }).filter(Boolean); // Remove any null entries
 
   // Log processed data
   console.log('Processed data:', processedData);
+
+  if (processedData.length === 0) {
+    console.log('No valid data points after processing');
+    return null;
+  }
 
   // Special handling for rain data
   if (sensorType === 'rain') {
