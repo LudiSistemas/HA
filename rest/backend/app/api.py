@@ -168,7 +168,7 @@ def parse_sensor_ids(sensor_ids):
 
 def calculate_relative_pressure(absolute_pressure: float, altitude: float, temperature: float) -> float:
     """
-    Calculate relative (sea level) pressure using the barometric formula
+    Calculate sea level pressure using the international barometric formula
     
     Parameters:
     - absolute_pressure: Pressure in hPa
@@ -176,19 +176,21 @@ def calculate_relative_pressure(absolute_pressure: float, altitude: float, tempe
     - temperature: Temperature in Celsius
     
     Returns:
-    - Relative pressure in hPa
+    - Sea level pressure in hPa
     """
     # Constants
+    Ch = 0.0065  # Temperature lapse rate (K/m)
+    M = 0.0289644  # Molar mass of dry air (kg/mol)
+    R = 8.31432  # Universal gas constant (N⋅m/(mol⋅K))
     g = 9.80665  # Gravitational acceleration (m/s^2)
-    R = 287.05   # Gas constant for dry air (J/(kg·K))
     
     # Convert temperature to Kelvin
     T = temperature + 273.15
     
-    # Calculate relative pressure
-    relative_pressure = absolute_pressure * exp((g * altitude) / (R * T))
+    # Calculate sea level pressure using the international barometric formula
+    sea_level_pressure = absolute_pressure * (1 + ((g * M * altitude)/(R * T))) ** (1/((Ch * R)/(g * M)))
     
-    return round(relative_pressure, 1)
+    return round(sea_level_pressure, 1)
 
 @router.get(
     "/sensors",
@@ -241,15 +243,21 @@ async def get_sensor_data(request: Request):
                                     )
                                     temp = float(temp_sensor['state']) if temp_sensor else 15  # default temp if not found
                                     
-                                    abs_pressure = float(sensor_data['state'])
-                                    rel_pressure = calculate_relative_pressure(
-                                        abs_pressure,
-                                        float(settings.STATION_ALTITUDE),
-                                        temp
-                                    )
-                                    
-                                    # Add calculated relative pressure to attributes
-                                    sensor_data['attributes']['relative_pressure'] = rel_pressure
+                                    try:
+                                        abs_pressure = float(sensor_data['state'])
+                                        rel_pressure = calculate_relative_pressure(
+                                            abs_pressure,
+                                            float(settings.STATION_ALTITUDE),
+                                            temp
+                                        )
+                                        
+                                        # Add both pressures to attributes
+                                        sensor_data['attributes']['absolute_pressure'] = abs_pressure
+                                        sensor_data['attributes']['relative_pressure'] = rel_pressure
+                                        # Update the main state to show relative pressure
+                                        sensor_data['state'] = str(rel_pressure)
+                                    except (ValueError, TypeError) as e:
+                                        logger.error(f"Error calculating relative pressure: {e}")
                                 
                                 responses.append(sensor_data)
                             else:

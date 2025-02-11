@@ -125,13 +125,23 @@ const WeatherDisplay = ({ data, error }) => {
   const renderValue = (sensor, config) => {
     let value = sensor.state;
     
-    // Use calculated relative pressure if available
-    if (sensor.entity_id.includes('absolute_pressure') && sensor.attributes.relative_pressure) {
-      value = sensor.attributes.relative_pressure;
+    // Special handling for pressure display
+    if (sensor.entity_id.includes('pressure')) {
+      const abs = sensor.attributes.absolute_pressure;
+      const rel = sensor.attributes.relative_pressure;
+      
+      return (
+        <>
+          <Value>
+            {formatValue(rel, config.precision)} {config.unit || sensor.attributes.unit_of_measurement}
+          </Value>
+          <div style={{ fontSize: '0.8em', color: '#888', marginTop: '5px' }}>
+            Apsolutni: {formatValue(abs, config.precision)} {config.unit || sensor.attributes.unit_of_measurement}
+          </div>
+        </>
+      );
     }
     
-    value = formatValue(value, config.precision);
-
     if (sensor.entity_id === 'sensor.ws2900_v2_02_03_wind_direction') {
       const speedSensor = data.find(s => s.entity_id === 'sensor.ws2900_v2_02_03_wind_speed');
       const gustSensor = data.find(s => s.entity_id === 'sensor.ws2900_v2_02_03_wind_gust');
