@@ -3,6 +3,7 @@ import styled, { keyframes } from 'styled-components';
 import { sensorConfig } from '../config/sensors';
 import WeatherChart from './WeatherChart';
 import WindCompass from './WindCompass';
+import SiteStats from './SiteStats';
 
 const glow = keyframes`
   0% {
@@ -177,6 +178,7 @@ const WeatherDisplay = ({ data, error }) => {
           </WeatherCard>
         );
       })}
+      <SiteStats />
     </Container>
   );
 };
