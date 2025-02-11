@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Request
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Dict, Tuple
 import httpx
 from pydantic import BaseModel, Field
 from app.config import settings
@@ -7,6 +7,29 @@ from datetime import datetime, timedelta
 
 # Create router with prefix to match nginx location
 router = APIRouter(prefix="/api", tags=["sensors"])
+
+# Cache storage
+sensor_cache: Dict[str, Tuple[list, datetime]] = {}
+CACHE_TTL = 60  # seconds
+
+def get_cached_data() -> Optional[list]:
+    """Get cached sensor data if it's still valid"""
+    if not sensor_cache:
+        return None
+        
+    data, timestamp = sensor_cache.get('sensors', (None, None))
+    if not data or not timestamp:
+        return None
+        
+    age = (datetime.now() - timestamp).total_seconds()
+    if age > CACHE_TTL:
+        return None
+        
+    return data
+
+def update_cache(data: list) -> None:
+    """Update the cache with new sensor data"""
+    sensor_cache['sensors'] = (data, datetime.now())
 
 # Debug route to check if API is accessible
 @router.get("/ping")
@@ -96,57 +119,20 @@ def parse_sensor_ids(sensor_ids):
     "/sensors",
     response_model=List[SensorData],
     summary="Get Sensor Data",
-    description="Retrieves the current state of all configured sensors from Home Assistant",
-    responses={
-        200: {
-            "description": "Successfully retrieved sensor data",
-            "content": {
-                "application/json": {
-                    "example": [{
-                        "entity_id": "sensor.ws2900_v2_02_03_outdoor_temperature",
-                        "state": "-3.8",
-                        "attributes": {
-                            "state_class": "measurement",
-                            "unit_of_measurement": "°C",
-                            "device_class": "temperature",
-                            "friendly_name": "WS2900_V2.02.03 Outdoor Temperature"
-                        },
-                        "last_updated": "2024-02-10T18:36:52.245418+00:00"
-                    }, {
-                        "entity_id": "sensor.ws2900_v2_02_03_humidity",
-                        "state": "85",
-                        "attributes": {
-                            "state_class": "measurement",
-                            "unit_of_measurement": "%",
-                            "device_class": "humidity",
-                            "friendly_name": "WS2900_V2.02.03 Humidity"
-                        }
-                    }, {
-                        "entity_id": "sensor.ws2900_v2_02_03_wind_direction",
-                        "state": "180",
-                        "attributes": {
-                            "state_class": "measurement",
-                            "unit_of_measurement": "°",
-                            "friendly_name": "WS2900_V2.02.03 Wind Direction"
-                        }
-                    }]
-                }
-            }
-        },
-        500: {
-            "description": "Internal server error",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "Error fetching sensor data"}
-                }
-            }
-        }
-    }
+    description="Retrieves the current state of all configured sensors from Home Assistant"
 )
 async def get_sensor_data():
     """
     Fetches current sensor data from Home Assistant.
+    Uses cache if data is less than 60 seconds old.
     """
+    # Check cache first
+    cached_data = get_cached_data()
+    if cached_data:
+        print("Returning cached data")
+        return cached_data
+        
+    print("Cache miss, fetching fresh data")
     headers = {
         "Authorization": f"Bearer {settings.HASS_TOKEN}",
         "Content-Type": "application/json",
@@ -155,16 +141,11 @@ async def get_sensor_data():
     try:
         async with httpx.AsyncClient() as client:
             responses = []
-            
-            # Use the sensor_list property instead of parsing
             sensor_ids = settings.sensor_list
-            print(f"Fetching data for sensors: {sensor_ids}")
             
             for sensor_id in sensor_ids:
                 try:
                     url = f"{settings.HASS_URL}/api/states/{sensor_id}"
-                    print(f"Fetching: {url}")
-                    
                     response = await client.get(
                         url,
                         headers=headers,
@@ -193,7 +174,10 @@ async def get_sensor_data():
                     detail="No valid sensor data retrieved. Check server logs for details."
                 )
             
-            print(f"Successfully retrieved {len(responses)} sensors")  # Debug log
+            # Update cache with new data
+            update_cache(responses)
+            print(f"Successfully retrieved and cached {len(responses)} sensors")
+            
             return responses
             
     except Exception as e:
