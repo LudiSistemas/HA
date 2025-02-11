@@ -300,3 +300,4 @@ async def get_stats():
         'hourly_stats': dict(analytics_data['hourly_stats']),
         'sensor_stats': dict(analytics_data['sensor_requests'])
     } 
+    

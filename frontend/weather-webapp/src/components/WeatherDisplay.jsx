@@ -171,6 +171,7 @@ const WeatherDisplay = ({ data, error }) => {
               data={historicalData[sensor.entity_id]}
               unit={config.unit || sensor.attributes.unit_of_measurement}
               precision={config.precision}
+              sensorType={sensor.entity_id.includes('rain') ? 'rain' : 'default'}
             />
             <LastUpdated>
               Poslednji put ažurirano: {new Date(sensor.last_updated).toLocaleString()}
