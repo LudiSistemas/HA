@@ -231,7 +231,7 @@ const isSnowLikely = (temp, humidity, pressure, pressureTrend) => {
   return probability > 0.5;
 };
 
-const getWeatherCondition = (temp, humidity, pressure, windSpeed, windGust, rain, season) => {
+const getWeatherCondition = (temp, humidity, pressure, windSpeed, windGust, rain, season, pressureHistory) => {
   if (!temp || !humidity || !pressure) return null;
 
   const norms = SEASONAL_NORMS[season];
@@ -292,10 +292,10 @@ const getWeatherCondition = (temp, humidity, pressure, windSpeed, windGust, rain
   return conditions.join(' • ');
 };
 
-const getPressureTrend = (pressureHistory) => {
+const getPressureTrend = (pressureHistory, currentData) => {
   if (!pressureHistory?.history || pressureHistory.history.length < 2) return null;
 
-  const recent = pressureHistory.history.slice(-12); // Last 12 readings
+  const recent = pressureHistory.history.slice(-12);
   const pressureChange = recent[recent.length - 1].state - recent[0].state;
   const changeRate = pressureChange / (recent.length - 1);
   const currentPressure = parseFloat(recent[recent.length - 1].state);
@@ -336,7 +336,7 @@ const getPressureTrend = (pressureHistory) => {
 
   // Enhanced snow prediction in pressure analysis
   const currentSeason = getCurrentSeason();
-  if (currentSeason === 'WINTER') {
+  if (currentSeason === 'WINTER' && currentData) {
     const temp = parseFloat(currentData.find(s => s.entity_id.includes('temperature'))?.state);
     const humidity = parseFloat(currentData.find(s => s.entity_id.includes('humidity'))?.state);
     
@@ -421,10 +421,11 @@ const WeatherConditions = ({ currentData, pressureHistory }) => {
     parseFloat(windSpeed),
     parseFloat(windGust),
     parseFloat(rain),
-    currentSeason
+    currentSeason,
+    pressureHistory
   );
   
-  const pressurePredictions = getPressureTrend(pressureHistory);
+  const pressurePredictions = getPressureTrend(pressureHistory, currentData);
   const windPredictions = getWindPrediction(windSpeed, windGust, windDir);
   
   const seasonalPredictions = getSeasonalPrediction(
