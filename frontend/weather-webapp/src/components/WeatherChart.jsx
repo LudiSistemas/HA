@@ -83,15 +83,25 @@ const TimeRange = styled.div`
 const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
   const [timeOffset, setTimeOffset] = useState(0);
   const [error, setError] = useState(null);
-  const [chartData, setChartData] = useState(data);
+  const [chartData, setChartData] = useState(null);
   
   const MAX_OFFSET = 30;
 
   useEffect(() => {
-    setChartData(data);
+    console.log('Initial data:', data);
+    if (data?.history) {
+      setChartData(data);
+    }
   }, [data]);
 
-  if (!chartData?.history) return null;
+  useEffect(() => {
+    console.log('Chart data updated:', chartData);
+  }, [chartData]);
+
+  if (!chartData?.history) {
+    console.log('No chart data available');
+    return null;
+  }
 
   const formatValue = (value) => Number(value).toFixed(precision);
 
@@ -139,10 +149,16 @@ const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
   startTime.setDate(startTime.getDate() - timeOffset - 1);
 
   // Process data for chart
-  let processedData = chartData.history.map(item => ({
-    time: new Date(item.last_updated).getTime(),
-    value: parseFloat(item.state)
-  }));
+  let processedData = chartData.history.map(item => {
+    console.log('Processing item:', item);
+    return {
+      time: new Date(item.last_updated).getTime(),
+      value: parseFloat(item.state)
+    };
+  });
+
+  // Log processed data
+  console.log('Processed data:', processedData);
 
   // Special handling for rain data
   if (sensorType === 'rain') {
@@ -173,15 +189,16 @@ const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
             <XAxis
               dataKey="time"
               type="number"
-              domain={[timeRange.min, timeRange.max]}
+              domain={[
+                processedData[0]?.time || 0,
+                processedData[processedData.length - 1]?.time || 0
+              ]}
               tickFormatter={(time) => new Date(time).toLocaleTimeString()}
               stroke="#666"
-              padding={{ left: 0, right: 0 }}
             />
             <YAxis
               stroke="#666"
               domain={sensorType === 'rain' ? [0, 'auto'] : ['auto', 'auto']}
-              padding={{ top: 10, bottom: 10 }}
             />
             <Tooltip
               contentStyle={{ 
@@ -193,8 +210,12 @@ const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
               labelFormatter={(time) => new Date(time).toLocaleString()}
               formatter={(value) => [value.toFixed(precision) + unit]}
             />
-            <ReferenceLine y={chartData.min} stroke="#4444ff" strokeDasharray="3 3" />
-            <ReferenceLine y={chartData.max} stroke="#ff4444" strokeDasharray="3 3" />
+            {chartData.min !== undefined && (
+              <ReferenceLine y={chartData.min} stroke="#4444ff" strokeDasharray="3 3" />
+            )}
+            {chartData.max !== undefined && (
+              <ReferenceLine y={chartData.max} stroke="#ff4444" strokeDasharray="3 3" />
+            )}
             <Line
               type="monotone"
               dataKey="value"

@@ -192,6 +192,7 @@ const WeatherDisplay = ({ data, error }) => {
       )}
       {data?.map((sensor) => {
         const config = getSensorConfig(sensor.entity_id);
+        console.log('Historical data for sensor:', sensor.entity_id, historicalData[sensor.entity_id]);
         return (
           <WeatherCard key={sensor.entity_id}>
             <Label>
