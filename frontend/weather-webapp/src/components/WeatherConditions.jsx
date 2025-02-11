@@ -206,7 +206,7 @@ const isSnowLikely = (temp, humidity, pressure, pressureTrend) => {
   const basicConditions = temp <= 0 && humidity > 80;
   if (!basicConditions) return false;
 
-  // Pressure conditions favorable for snow
+  // Pressure conditions favorable for snow (using sea level pressure)
   const pressureConditions = pressure < 1015 && pressure > 995;
   if (!pressureConditions) return false;
 
@@ -226,7 +226,7 @@ const isSnowLikely = (temp, humidity, pressure, pressureTrend) => {
   else if (humidity > 85) probability += 0.2;
   else probability += 0.1;
 
-  // Pressure factors
+  // Pressure factors (using sea level pressure)
   if (pressureIsFalling && pressure < 1010) probability += 0.3;
   else if (pressureIsFalling) probability += 0.2;
 
@@ -274,12 +274,13 @@ const getWeatherCondition = (temp, humidity, pressure, windSpeed, windGust, rain
     else conditions.push('⛈️ Jaka kiša');
   }
   
-  // Enhanced snow prediction
+  // Enhanced snow prediction using relative pressure
   if (season === 'WINTER') {
     const pressureTrend = pressureHistory?.history 
       ? pressureHistory.history[pressureHistory.history.length - 1].state - pressureHistory.history[0].state
       : 0;
 
+    // Using relative (sea level) pressure for more accurate predictions
     if (isSnowLikely(temp, humidity, pressure, pressureTrend)) {
       conditions.push('🌨️ Veliki izgledi za sneg');
     } else if (temp <= 0 && humidity > 80 && pressure < 1015) {
@@ -304,7 +305,7 @@ const getPressureTrend = (pressureHistory, currentData) => {
   
   const predictions = [];
   
-  // Rapid pressure changes
+  // Using relative (sea level) pressure for predictions
   if (Math.abs(changeRate) > 0.5) {
     if (changeRate > 0) {
       predictions.push({
@@ -321,7 +322,7 @@ const getPressureTrend = (pressureHistory, currentData) => {
     }
   }
   
-  // Pressure thresholds
+  // Pressure thresholds for sea level pressure
   if (currentPressure < 1000) {
     predictions.push({
       message: '🌧️ Nizak pritisak - povećana verovatnoća padavina',
@@ -336,7 +337,7 @@ const getPressureTrend = (pressureHistory, currentData) => {
     });
   }
 
-  // Enhanced snow prediction in pressure analysis
+  // Enhanced snow prediction using relative pressure
   const currentSeason = getCurrentSeason();
   if (currentSeason === 'WINTER' && currentData) {
     const temp = parseFloat(currentData.find(s => s.entity_id.includes('temperature'))?.state);
