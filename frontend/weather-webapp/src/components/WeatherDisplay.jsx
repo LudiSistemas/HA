@@ -4,6 +4,7 @@ import { sensorConfig } from '../config/sensors';
 import WeatherChart from './WeatherChart';
 import WindCompass from './WindCompass';
 import SiteStats from './SiteStats';
+import WeatherConditions from './WeatherConditions';
 
 const glow = keyframes`
   0% {
@@ -164,6 +165,14 @@ const WeatherDisplay = ({ data, error }) => {
 
   return (
     <Container>
+      {data && (
+        <WeatherCard style={{ order: -1 }}>
+          <WeatherConditions 
+            currentData={data}
+            pressureHistory={historicalData['sensor.ws2900_v2_02_03_absolute_pressure']}
+          />
+        </WeatherCard>
+      )}
       {data?.map((sensor) => {
         const config = getSensorConfig(sensor.entity_id);
         return (
