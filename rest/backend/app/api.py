@@ -134,11 +134,6 @@ class SensorData(BaseModel):
 async def get_sensor_data():
     """
     Fetches current sensor data from Home Assistant.
-    
-    Returns a list of sensor states including:
-    - Current value
-    - Sensor attributes
-    - Last update timestamp
     """
     headers = {
         "Authorization": f"Bearer {settings.HASS_TOKEN}",
@@ -148,37 +143,54 @@ async def get_sensor_data():
     try:
         async with httpx.AsyncClient() as client:
             responses = []
-            # Split the sensor IDs if it's a comma-separated string
-            sensor_ids = settings.SENSOR_IDS.split(',') if isinstance(settings.SENSOR_IDS, str) else settings.SENSOR_IDS
+            
+            # Ensure we have a list of sensor IDs
+            if isinstance(settings.SENSOR_IDS, str):
+                sensor_ids = [s.strip() for s in settings.SENSOR_IDS.split(',')]
+            else:
+                sensor_ids = settings.SENSOR_IDS
+
+            print(f"Fetching data for sensors: {sensor_ids}")  # Debug log
             
             for sensor_id in sensor_ids:
-                sensor_id = sensor_id.strip()  # Remove any whitespace
-                response = await client.get(
-                    f"{settings.HASS_URL}/api/states/{sensor_id}",
-                    headers=headers
-                )
-                
-                if response.status_code == 200:
-                    sensor_data = response.json()
-                    # Validate the response data
-                    try:
-                        validated_data = SensorData(**sensor_data)
-                        if validated_data.validate_state():
-                            responses.append(sensor_data)
-                        else:
-                            print(f"Invalid state value for sensor {sensor_id}: {sensor_data['state']}")
-                    except Exception as e:
-                        print(f"Validation error for sensor {sensor_id}: {e}")
-                else:
-                    print(f"Error fetching sensor {sensor_id}: {response.status_code}")
+                try:
+                    response = await client.get(
+                        f"{settings.HASS_URL}/api/states/{sensor_id}",
+                        headers=headers,
+                        timeout=10.0
+                    )
                     
+                    if response.status_code == 200:
+                        sensor_data = response.json()
+                        try:
+                            validated_data = SensorData(**sensor_data)
+                            if validated_data.validate_state():
+                                responses.append(sensor_data)
+                            else:
+                                print(f"Invalid state value for sensor {sensor_id}: {sensor_data['state']}")
+                        except Exception as e:
+                            print(f"Validation error for sensor {sensor_id}: {e}")
+                    else:
+                        print(f"Error fetching sensor {sensor_id}: HTTP {response.status_code}")
+                except Exception as e:
+                    print(f"Request error for sensor {sensor_id}: {str(e)}")
+                    continue
+            
             if not responses:
-                raise HTTPException(status_code=500, detail="No valid sensor data retrieved")
-                    
+                raise HTTPException(
+                    status_code=500, 
+                    detail="No valid sensor data retrieved. Check server logs for details."
+                )
+            
+            print(f"Successfully retrieved {len(responses)} sensors")  # Debug log
             return responses
+            
     except Exception as e:
         print(f"Error in get_sensor_data: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to fetch sensor data: {str(e)}"
+        )
 
 @router.get("/sensors/{sensor_id}/history")
 async def get_sensor_history(sensor_id: str):
