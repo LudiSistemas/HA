@@ -199,6 +199,38 @@ const getSeasonalPrediction = (temp, humidity, pressure, season) => {
   return predictions;
 };
 
+const isSnowLikely = (temp, humidity, pressure, pressureTrend) => {
+  // Basic conditions that must be met
+  const basicConditions = temp <= 0 && humidity > 80;
+  if (!basicConditions) return false;
+
+  // Pressure conditions favorable for snow
+  const pressureConditions = pressure < 1015 && pressure > 995;
+  if (!pressureConditions) return false;
+
+  // Check pressure trend (falling pressure often indicates precipitation)
+  const pressureIsFalling = pressureTrend < 0;
+
+  // Calculate probability based on conditions
+  let probability = 0;
+  
+  // Temperature factors
+  if (temp <= -2) probability += 0.3;
+  else if (temp <= -1) probability += 0.2;
+  else probability += 0.1;
+
+  // Humidity factors
+  if (humidity > 90) probability += 0.3;
+  else if (humidity > 85) probability += 0.2;
+  else probability += 0.1;
+
+  // Pressure factors
+  if (pressureIsFalling && pressure < 1010) probability += 0.3;
+  else if (pressureIsFalling) probability += 0.2;
+
+  return probability > 0.5;
+};
+
 const getWeatherCondition = (temp, humidity, pressure, windSpeed, windGust, rain, season) => {
   if (!temp || !humidity || !pressure) return null;
 
@@ -240,9 +272,17 @@ const getWeatherCondition = (temp, humidity, pressure, windSpeed, windGust, rain
     else conditions.push('⛈️ Jaka kiša');
   }
   
-  // Seasonal specific conditions - update snow prediction logic
-  if (season === 'WINTER' && temp <= 0 && humidity > 80 && pressure < 1015) {
-    conditions.push('🌨️ Moguć sneg');  // Only if we have right pressure conditions too
+  // Enhanced snow prediction
+  if (season === 'WINTER') {
+    const pressureTrend = pressureHistory?.history 
+      ? pressureHistory.history[pressureHistory.history.length - 1].state - pressureHistory.history[0].state
+      : 0;
+
+    if (isSnowLikely(temp, humidity, pressure, pressureTrend)) {
+      conditions.push('🌨️ Veliki izgledi za sneg');
+    } else if (temp <= 0 && humidity > 80 && pressure < 1015) {
+      conditions.push('🌨️ Moguć sneg');
+    }
   }
   
   if (season === 'SUMMER' && temp > 30 && humidity > 60) {
@@ -257,7 +297,8 @@ const getPressureTrend = (pressureHistory) => {
 
   const recent = pressureHistory.history.slice(-12); // Last 12 readings
   const pressureChange = recent[recent.length - 1].state - recent[0].state;
-  const changeRate = pressureChange / (recent.length - 1); // Change per reading
+  const changeRate = pressureChange / (recent.length - 1);
+  const currentPressure = parseFloat(recent[recent.length - 1].state);
   
   const predictions = [];
   
@@ -279,7 +320,6 @@ const getPressureTrend = (pressureHistory) => {
   }
   
   // Pressure thresholds
-  const currentPressure = parseFloat(recent[recent.length - 1].state);
   if (currentPressure < 1000) {
     predictions.push({
       message: '🌧️ Nizak pritisak - povećana verovatnoća padavina',
@@ -294,14 +334,25 @@ const getPressureTrend = (pressureHistory) => {
     });
   }
 
-  // Add snow-specific pressure prediction
+  // Enhanced snow prediction in pressure analysis
   const currentSeason = getCurrentSeason();
-  if (currentSeason === 'WINTER' && currentPressure < 1015 && temp <= 0) {
-    predictions.push({
-      message: '🌨️ Postoje uslovi za snežne padavine',
-      severity: 'medium',
-      priority: 2
-    });
+  if (currentSeason === 'WINTER') {
+    const temp = parseFloat(currentData.find(s => s.entity_id.includes('temperature'))?.state);
+    const humidity = parseFloat(currentData.find(s => s.entity_id.includes('humidity'))?.state);
+    
+    if (isSnowLikely(temp, humidity, currentPressure, pressureChange)) {
+      predictions.push({
+        message: '🌨️ Visoka verovatnoća snežnih padavina',
+        severity: 'high',
+        priority: 1
+      });
+    } else if (temp <= 0 && humidity > 80 && currentPressure < 1015 && pressureChange < 0) {
+      predictions.push({
+        message: '🌨️ Postoje uslovi za snežne padavine',
+        severity: 'medium',
+        priority: 2
+      });
+    }
   }
 
   return predictions.sort((a, b) => a.priority - b.priority);
