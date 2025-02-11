@@ -130,7 +130,7 @@ const WeatherDisplay = ({ data, error }) => {
               precision={config.precision}
             />
             <LastUpdated>
-              Zadnji put ažurirano: {new Date(sensor.last_updated).toLocaleString()}
+              Poslednji put ažurirano: {new Date(sensor.last_updated).toLocaleString()}
             </LastUpdated>
           </WeatherCard>
         );
