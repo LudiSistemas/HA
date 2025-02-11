@@ -259,6 +259,13 @@ const getWeatherCondition = (temp, humidity, pressure, windSpeed, windGust, rain
   else if (humidity > 70) conditions.push('💧 Vlažno');
   else if (humidity < 30) conditions.push('🏜️ Suvo');
   
+  // Pressure based conditions
+  if (pressure >= 1020) {
+    conditions.push('🌤️ Stabilan vazdušni pritisak');
+  } else if (pressure <= 1000) {
+    conditions.push('🌧️ Nizak vazdušni pritisak');
+  }
+  
   // Wind conditions
   if (windSpeed > 10) {
     conditions.push('💨 Vetrovito');
@@ -274,24 +281,6 @@ const getWeatherCondition = (temp, humidity, pressure, windSpeed, windGust, rain
     else conditions.push('⛈️ Jaka kiša');
   }
   
-  // Enhanced snow prediction using relative pressure
-  if (season === 'WINTER') {
-    const pressureTrend = pressureHistory?.history 
-      ? pressureHistory.history[pressureHistory.history.length - 1].state - pressureHistory.history[0].state
-      : 0;
-
-    // Using relative (sea level) pressure for more accurate predictions
-    if (isSnowLikely(temp, humidity, pressure, pressureTrend)) {
-      conditions.push('🌨️ Veliki izgledi za sneg');
-    } else if (temp <= 0 && humidity > 80 && pressure < 1015) {
-      conditions.push('🌨️ Moguć sneg');
-    }
-  }
-  
-  if (season === 'SUMMER' && temp > 30 && humidity > 60) {
-    conditions.push('🌡️ Sparno');
-  }
-
   return conditions.join(' • ');
 };
 
@@ -305,24 +294,38 @@ const getPressureTrend = (pressureHistory, currentData) => {
   
   const predictions = [];
   
-  // Using relative (sea level) pressure for predictions
+  // More detailed pressure trend analysis
   if (Math.abs(changeRate) > 0.5) {
     if (changeRate > 0) {
       predictions.push({
-        message: '🌤️ Brzi rast pritiska - očekuje se značajno poboljšanje vremena',
+        message: '🌤️ Brzi rast pritiska - očekuje se stabilizacija vremena',
         severity: 'low',
         priority: 1
       });
     } else {
       predictions.push({
-        message: '🌧️ Brzi pad pritiska - moguće nevreme',
+        message: '🌧️ Brzi pad pritiska - moguće pogoršanje vremena',
         severity: 'high',
         priority: 1
       });
     }
+  } else if (Math.abs(changeRate) > 0.2) {
+    if (changeRate > 0) {
+      predictions.push({
+        message: '🌥️ Postepeni rast pritiska - vreme se poboljšava',
+        severity: 'low',
+        priority: 2
+      });
+    } else {
+      predictions.push({
+        message: '🌦️ Postepeni pad pritiska - moguća promena vremena',
+        severity: 'medium',
+        priority: 2
+      });
+    }
   }
   
-  // Pressure thresholds for sea level pressure
+  // Pressure level warnings
   if (currentPressure < 1000) {
     predictions.push({
       message: '🌧️ Nizak pritisak - povećana verovatnoća padavina',
@@ -335,27 +338,6 @@ const getPressureTrend = (pressureHistory, currentData) => {
       severity: 'low',
       priority: 2
     });
-  }
-
-  // Enhanced snow prediction using relative pressure
-  const currentSeason = getCurrentSeason();
-  if (currentSeason === 'WINTER' && currentData) {
-    const temp = parseFloat(currentData.find(s => s.entity_id.includes('temperature'))?.state);
-    const humidity = parseFloat(currentData.find(s => s.entity_id.includes('humidity'))?.state);
-    
-    if (isSnowLikely(temp, humidity, currentPressure, pressureChange)) {
-      predictions.push({
-        message: '🌨️ Visoka verovatnoća snežnih padavina',
-        severity: 'high',
-        priority: 1
-      });
-    } else if (temp <= 0 && humidity > 80 && currentPressure < 1015 && pressureChange < 0) {
-      predictions.push({
-        message: '🌨️ Postoje uslovi za snežne padavine',
-        severity: 'medium',
-        priority: 2
-      });
-    }
   }
 
   return predictions.sort((a, b) => a.priority - b.priority);
