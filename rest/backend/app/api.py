@@ -378,18 +378,26 @@ async def get_sensor_history(sensor_id: str, request: Request, offset: int = 0):
         "Content-Type": "application/json",
     }
     
-    # Calculate timestamp for 24 hours period with offset
-    end_time = datetime.utcnow() - timedelta(days=offset)
-    start_time = end_time - timedelta(hours=24)
-    
     try:
+        # Calculate timestamps for the requested period
+        now = datetime.now()
+        end_time = now - timedelta(days=offset)
+        start_time = end_time - timedelta(hours=24)
+        
+        # Format timestamps in ISO format
+        start_time_iso = start_time.isoformat()
+        end_time_iso = end_time.isoformat()
+        
+        logger.info(f"Fetching history for {sensor_id} from {start_time_iso} to {end_time_iso}")
+        
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{settings.HASS_URL}/api/history/period/{start_time.isoformat()}",
+                f"{settings.HASS_URL}/api/history/period/{start_time_iso}",
                 headers=headers,
                 params={
                     "filter_entity_id": sensor_id,
-                    "end_time": end_time.isoformat()
+                    "end_time": end_time_iso,
+                    "minimal_response": True
                 }
             )
             
@@ -398,11 +406,15 @@ async def get_sensor_history(sensor_id: str, request: Request, offset: int = 0):
                 if data and len(data) > 0:
                     history = data[0]
                     
+                    # Filter and validate values
                     values = []
+                    filtered_history = []
                     for item in history:
                         try:
                             if item['state'].replace('-', '').replace('.', '').isdigit():
-                                values.append(float(item['state']))
+                                value = float(item['state'])
+                                values.append(value)
+                                filtered_history.append(item)
                         except (ValueError, AttributeError):
                             continue
                     
@@ -411,14 +423,20 @@ async def get_sensor_history(sensor_id: str, request: Request, offset: int = 0):
                             'min': min(values),
                             'max': max(values),
                             'current': values[-1],
-                            'history': history,
-                            'start_time': start_time.isoformat(),
-                            'end_time': end_time.isoformat()
+                            'history': filtered_history,
+                            'start_time': start_time_iso,
+                            'end_time': end_time_iso
                         }
                         return stats
                     
+                logger.warning(f"No valid data found for {sensor_id} in the specified period")
+                raise HTTPException(status_code=404, detail="No data found for the specified period")
+                    
+            logger.error(f"Error fetching history: HTTP {response.status_code}")
             raise HTTPException(status_code=response.status_code, detail="Error fetching history")
+            
     except Exception as e:
+        logger.error(f"Error in get_sensor_history: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/stats")

@@ -81,30 +81,39 @@ const TimeRange = styled.div`
 `;
 
 const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
-  const [timeOffset, setTimeOffset] = useState(0); // Offset in days
+  const [timeOffset, setTimeOffset] = useState(0);
+  const [error, setError] = useState(null);
+  
+  const MAX_OFFSET = 30; // Maximum number of days we can go back
 
   if (!data?.history) return null;
 
   const formatValue = (value) => Number(value).toFixed(precision);
 
   const fetchHistoricalData = async (offset) => {
+    if (offset > MAX_OFFSET) {
+      setError('Ne možemo prikazati podatke starije od 30 dana');
+      return;
+    }
+    
     try {
-      const timestamp = new Date();
-      timestamp.setDate(timestamp.getDate() - offset);
-      
+      setError(null);
       const response = await fetch(
         `${import.meta.env.VITE_BACKEND_URL}/api/sensors/${entityId}/history?offset=${offset}`
       );
       
       if (response.ok) {
         const newData = await response.json();
-        // Update chart data
         data.history = newData.history;
         data.min = newData.min;
         data.max = newData.max;
+      } else {
+        const errorData = await response.json();
+        setError(errorData.detail || 'Greška pri učitavanju podataka');
       }
     } catch (error) {
       console.error('Error fetching historical data:', error);
+      setError('Greška pri učitavanju podataka');
     }
   };
 
@@ -195,7 +204,10 @@ const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
         </ResponsiveContainer>
       </ChartContainer>
       <NavigationButtons>
-        <NavButton onClick={handlePrevious}>
+        <NavButton 
+          onClick={handlePrevious}
+          disabled={timeOffset >= MAX_OFFSET}
+        >
           ◀ 24h ranije
         </NavButton>
         <NavButton 
@@ -205,6 +217,11 @@ const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
           24h kasnije ▶
         </NavButton>
       </NavigationButtons>
+      {error && (
+        <div style={{ color: '#ff4444', textAlign: 'center', marginTop: '10px' }}>
+          {error}
+        </div>
+      )}
       <TimeRange>
         {startTime.toLocaleDateString()} {startTime.toLocaleTimeString().slice(0, 5)} - 
         {endTime.toLocaleDateString()} {endTime.toLocaleTimeString().slice(0, 5)}
