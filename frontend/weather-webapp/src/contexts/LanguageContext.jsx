@@ -13,7 +13,9 @@ export const LanguageProvider = ({ children }) => {
         const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/user-location`);
         if (response.ok) {
           const { countryCode } = await response.json();
+          // Set language to English for non-ex-YU countries
           if (!exYuCountries.includes(countryCode)) {
+            console.log('Non-ex-YU visitor detected, setting language to English');
             setLanguage('en');
           }
         }

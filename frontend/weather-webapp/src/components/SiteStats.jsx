@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import styled from 'styled-components';
+import { LanguageContext } from '../contexts/LanguageContext';
+import { translations } from '../config/translations';
 
 const StatsContainer = styled.div`
   background: rgba(16, 16, 28, 0.95);
@@ -39,6 +41,8 @@ const StatLabel = styled.div`
 
 const SiteStats = () => {
   const [stats, setStats] = useState(null);
+  const { language } = useContext(LanguageContext);
+  const t = translations[language];
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -65,15 +69,15 @@ const SiteStats = () => {
       <StatGrid>
         <StatItem>
           <StatValue>{stats.total_visits}</StatValue>
-          <StatLabel>Ukupno poseta</StatLabel>
+          <StatLabel>{t.stats.totalVisits}</StatLabel>
         </StatItem>
         <StatItem>
           <StatValue>{stats.unique_visitors}</StatValue>
-          <StatLabel>Jedinstvenih posetilaca</StatLabel>
+          <StatLabel>{t.stats.uniqueVisitors}</StatLabel>
         </StatItem>
         <StatItem>
           <StatValue>{stats.last_24h_visits}</StatValue>
-          <StatLabel>Poseta u zadnja 24h</StatLabel>
+          <StatLabel>{t.stats.last24h}</StatLabel>
         </StatItem>
       </StatGrid>
     </StatsContainer>

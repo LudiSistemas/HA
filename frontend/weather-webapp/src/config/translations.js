@@ -23,6 +23,27 @@ export const translations = {
       pressureRise: '🌤️ Rapid pressure rise - weather improvement expected',
       // ... add all other warnings
     },
+    pressure: {
+      rising: {
+        rapid: '🌤️ Rapid pressure rise - weather stabilization expected',
+        steady: '🌥️ Steady pressure rise over last 3 hours',
+        long: '☀️ Long-term pressure rise - weather stabilization'
+      },
+      falling: {
+        rapid: '🌧️ Rapid pressure drop - possible weather deterioration',
+        steady: '🌦️ Steady pressure drop over last 3 hours',
+        long: '🌧️ Long-term pressure drop - storm system developing'
+      },
+      levels: {
+        high: '☀️ High pressure - stable weather',
+        low: '🌧️ Low pressure - increased chance of precipitation'
+      }
+    },
+    stats: {
+      totalVisits: 'Total visits',
+      uniqueVisitors: 'Unique visitors',
+      last24h: 'Visits in last 24h'
+    },
     headers: {
       forecast: 'Forecast',
       warnings: 'Warnings',
@@ -52,6 +73,11 @@ export const translations = {
       pressureDrop: '🌧️ Brzi pad pritiska - moguće nevreme',
       pressureRise: '🌤️ Brzi rast pritiska - očekuje se značajno poboljšanje vremena',
       // ... keep all existing Serbian warnings
+    },
+    stats: {
+      totalVisits: 'Ukupno poseta',
+      uniqueVisitors: 'Jedinstvenih posetilaca',
+      last24h: 'Poseta u zadnja 24h'
     },
     headers: {
       forecast: 'Prognoza',
