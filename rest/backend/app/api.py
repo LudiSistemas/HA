@@ -32,8 +32,11 @@ async def get_config():
 class SensorAttributes(BaseModel):
     unit_of_measurement: str
     friendly_name: str
-    state_class: str = "measurement"
+    state_class: Optional[str] = "measurement"
     device_class: Optional[str] = None
+    
+    class Config:
+        extra = "allow"  # Allow additional fields in attributes
 
 class SensorData(BaseModel):
     entity_id: str
@@ -145,21 +148,36 @@ async def get_sensor_data():
     try:
         async with httpx.AsyncClient() as client:
             responses = []
-            for sensor_id in settings.SENSOR_IDS:
+            # Split the sensor IDs if it's a comma-separated string
+            sensor_ids = settings.SENSOR_IDS.split(',') if isinstance(settings.SENSOR_IDS, str) else settings.SENSOR_IDS
+            
+            for sensor_id in sensor_ids:
+                sensor_id = sensor_id.strip()  # Remove any whitespace
                 response = await client.get(
                     f"{settings.HASS_URL}/api/states/{sensor_id}",
                     headers=headers
                 )
+                
                 if response.status_code == 200:
-                    responses.append(response.json())
+                    sensor_data = response.json()
+                    # Validate the response data
+                    try:
+                        validated_data = SensorData(**sensor_data)
+                        if validated_data.validate_state():
+                            responses.append(sensor_data)
+                        else:
+                            print(f"Invalid state value for sensor {sensor_id}: {sensor_data['state']}")
+                    except Exception as e:
+                        print(f"Validation error for sensor {sensor_id}: {e}")
                 else:
-                    raise HTTPException(
-                        status_code=response.status_code, 
-                        detail=f"Error fetching sensor {sensor_id}"
-                    )
+                    print(f"Error fetching sensor {sensor_id}: {response.status_code}")
+                    
+            if not responses:
+                raise HTTPException(status_code=500, detail="No valid sensor data retrieved")
                     
             return responses
     except Exception as e:
+        print(f"Error in get_sensor_data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/sensors/{sensor_id}/history")
