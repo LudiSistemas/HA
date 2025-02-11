@@ -8,8 +8,13 @@ const ChartContainer = styled.div`
   margin-top: 20px;
 
   @media (min-width: 1024px) {
-    width: 65%;
+    width: 100%;
+    height: 300px;
     margin: 20px auto;
+  }
+
+  @media (min-width: 1440px) {
+    height: 400px;
   }
 `;
 
@@ -21,8 +26,13 @@ const StatsContainer = styled.div`
   color: #888;
 
   @media (min-width: 1024px) {
-    width: 65%;
-    margin: 10px auto;
+    width: 100%;
+    margin: 20px auto;
+    font-size: 1em;
+  }
+
+  @media (min-width: 1440px) {
+    font-size: 1.1em;
   }
 `;
 

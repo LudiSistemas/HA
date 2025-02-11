@@ -38,8 +38,12 @@ const WeatherCard = styled.div`
   animation: ${glow} 2s ease-in-out infinite;
 
   @media (min-width: 1024px) {
-    width: 65%;
-    max-width: none;
+    width: 80vw;
+    max-width: 1200px;
+  }
+
+  @media (min-width: 1440px) {
+    width: 65vw;
   }
 `;
 
