@@ -10,7 +10,7 @@ export const sensorConfig = {
     icon: '🌡️',
     precision: 1
   },
-  'sensor.ws2900_v2_02_03_relative_pressure': {
+  'sensor.ws2900_v2_02_03_absolute_pressure': {
     name: 'Atmosferski pritisak',
     icon: '🌪️',
     precision: 0
@@ -54,5 +54,11 @@ export const sensorConfig = {
     name: 'Udari vetra',
     icon: '💨',
     precision: 1
+  },
+  'sensor.ws2900_v2_02_03_hourly_rain_rate': {
+    name: 'Količina padavina',
+    icon: '🌧️',
+    precision: 1,
+    unit: 'mm/h'
   }
 }; 

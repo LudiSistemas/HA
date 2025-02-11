@@ -127,6 +127,8 @@ class SensorData(BaseModel):
             return "uv"
         elif "solar" in self.entity_id:
             return "solar"
+        elif "rain" in self.entity_id:
+            return "rain"
         return "unknown"
     
     def validate_state(self) -> bool:
@@ -144,6 +146,8 @@ class SensorData(BaseModel):
             elif self.sensor_type == "uv":
                 return 0 <= value <= 20
             elif self.sensor_type == "solar":
+                return value >= 0
+            elif self.sensor_type == "rain":
                 return value >= 0
             return True
         except ValueError:
