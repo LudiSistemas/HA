@@ -168,23 +168,32 @@ def parse_sensor_ids(sensor_ids):
 
 def calculate_relative_pressure(absolute_pressure: float, altitude: float, temperature: float) -> float:
     """
-    Calculate sea level pressure using the simplified barometric formula
+    Calculate mean sea level pressure using the International Standard Atmosphere formula:
+    P0 = P1 (1 - (0.0065h/ (T + 0.0065h + 273.15)))-5.257
     
     Parameters:
-    - absolute_pressure: Pressure in hPa
-    - altitude: Altitude in meters
-    - temperature: Temperature in Celsius
+    - absolute_pressure: Station pressure (P1) in hPa
+    - altitude: Station elevation (h) in meters
+    - temperature: Temperature (T) in Celsius
     
     Returns:
-    - Sea level pressure in hPa
+    - Mean sea level pressure (P0) in hPa
     """
-    # Convert temperature to Kelvin
-    T = temperature + 273.15
-    
-    # Simplified barometric formula
-    sea_level_pressure = absolute_pressure * (1 + ((0.0065 * altitude) / T)) ** 5.257
-    
-    return round(sea_level_pressure, 1)
+    try:
+        # P0 = P1 (1 - (0.0065h/ (T + 0.0065h + 273.15)))-5.257
+        P1 = float(absolute_pressure)
+        h = float(altitude)
+        T = float(temperature)
+        
+        denominator = T + (0.0065 * h) + 273.15
+        fraction = (0.0065 * h) / denominator
+        
+        P0 = P1 * pow(1 - fraction, -5.257)
+        
+        return round(P0, 1)
+    except Exception as e:
+        logger.error(f"Error calculating sea level pressure: {e}")
+        return absolute_pressure
 
 @router.get(
     "/sensors",
