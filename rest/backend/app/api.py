@@ -26,6 +26,29 @@ CACHE_TTL = 60  # seconds
 # Define path for analytics data
 ANALYTICS_FILE = Path(__file__).parent.parent / 'data' / 'analytics.json'
 
+# Add session tracking
+SESSION_DURATION = 30 * 60  # 30 minutes in seconds
+active_sessions = {}
+
+def is_new_session(client_ip: str) -> bool:
+    """Check if this is a new session for the IP"""
+    current_time = time.time()
+    
+    # Clean up expired sessions
+    expired = [ip for ip, timestamp in active_sessions.items() 
+              if current_time - timestamp > SESSION_DURATION]
+    for ip in expired:
+        del active_sessions[ip]
+    
+    # Check if this is a new session
+    if client_ip not in active_sessions:
+        active_sessions[client_ip] = current_time
+        return True
+    
+    # Update session timestamp
+    active_sessions[client_ip] = current_time
+    return False
+
 def load_analytics():
     """Load analytics data from file"""
     try:
@@ -105,26 +128,28 @@ def update_analytics(request: Request):
         # Get client IP from Cloudflare or fallback to direct IP
         client_ip = request.headers.get('cf-connecting-ip') or request.headers.get('x-real-ip') or request.client.host
         
-        # Update total visits
-        analytics_data['total_visits'] += 1
-        
-        # Update unique visitors
-        analytics_data['unique_visitors'].add(client_ip)
-        
-        # Update hourly stats
-        current_hour = datetime.now().strftime('%Y-%m-%d %H:00')
-        analytics_data['hourly_stats'][current_hour] += 1
-        
-        # Clean up old hourly stats (keep last 24 hours)
-        cutoff = datetime.now() - timedelta(hours=24)
-        analytics_data['hourly_stats'] = {
-            k: v for k, v in analytics_data['hourly_stats'].items()
-            if datetime.strptime(k, '%Y-%m-%d %H:00') > cutoff
-        }
-        
-        # Save to file periodically (every 10 visits)
-        if analytics_data['total_visits'] % 10 == 0:
-            save_analytics(analytics_data)
+        # Only count as visit if it's a new session
+        if is_new_session(client_ip):
+            # Update total visits
+            analytics_data['total_visits'] += 1
+            
+            # Update unique visitors
+            analytics_data['unique_visitors'].add(client_ip)
+            
+            # Update hourly stats
+            current_hour = datetime.now().strftime('%Y-%m-%d %H:00')
+            analytics_data['hourly_stats'][current_hour] += 1
+            
+            # Clean up old hourly stats (keep last 24 hours)
+            cutoff = datetime.now() - timedelta(hours=24)
+            analytics_data['hourly_stats'] = {
+                k: v for k, v in analytics_data['hourly_stats'].items()
+                if datetime.strptime(k, '%Y-%m-%d %H:00') > cutoff
+            }
+            
+            # Save to file periodically (every 10 visits)
+            if analytics_data['total_visits'] % 10 == 0:
+                save_analytics(analytics_data)
             
     except Exception as e:
         logger.error(f"Error updating analytics: {e}")
@@ -407,10 +432,16 @@ async def get_stats():
             if datetime.strptime(timestamp, '%Y-%m-%d %H:00') > cutoff
         )
         
+        # Calculate active sessions
+        current_time = time.time()
+        active_count = sum(1 for timestamp in active_sessions.values() 
+                         if current_time - timestamp <= SESSION_DURATION)
+        
         return {
             'total_visits': analytics_data['total_visits'],
             'unique_visitors': len(analytics_data['unique_visitors']),
             'last_24h_visits': last_24h_visits,
+            'active_sessions': active_count,
             'hourly_stats': dict(analytics_data['hourly_stats']),
             'sensor_stats': dict(analytics_data['sensor_requests'])
         }
