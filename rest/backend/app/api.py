@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
-from typing import List
+from typing import List, Optional, Literal
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.config import settings
 from datetime import datetime, timedelta
 
@@ -29,12 +29,53 @@ async def get_config():
         "hass_url": settings.HASS_URL.replace("http://192.168.", "http://homeassistant.")  # Sanitize internal URL
     }
 
-# Response model for better OpenAPI documentation
+class SensorAttributes(BaseModel):
+    unit_of_measurement: str
+    friendly_name: str
+    state_class: str = "measurement"
+    device_class: Optional[str] = None
+
 class SensorData(BaseModel):
     entity_id: str
     state: str
-    attributes: dict
+    attributes: SensorAttributes
     last_updated: str
+    
+    @property
+    def sensor_type(self) -> str:
+        if "temperature" in self.entity_id:
+            return "temperature"
+        elif "humidity" in self.entity_id:
+            return "humidity"
+        elif "pressure" in self.entity_id:
+            return "pressure"
+        elif "wind" in self.entity_id:
+            return "wind"
+        elif "uv" in self.entity_id:
+            return "uv"
+        elif "solar" in self.entity_id:
+            return "solar"
+        return "unknown"
+    
+    def validate_state(self) -> bool:
+        """Validates state based on sensor type"""
+        try:
+            value = float(self.state)
+            if self.sensor_type == "temperature":
+                return -50 <= value <= 60
+            elif self.sensor_type == "humidity":
+                return 0 <= value <= 100
+            elif self.sensor_type == "pressure":
+                return 800 <= value <= 1200
+            elif self.sensor_type == "wind":
+                return 0 <= value <= 360 if "direction" in self.entity_id else value >= 0
+            elif self.sensor_type == "uv":
+                return 0 <= value <= 20
+            elif self.sensor_type == "solar":
+                return value >= 0
+            return True
+        except ValueError:
+            return False
 
 @router.get(
     "/sensors",
@@ -55,7 +96,24 @@ class SensorData(BaseModel):
                             "device_class": "temperature",
                             "friendly_name": "WS2900_V2.02.03 Outdoor Temperature"
                         },
-                        "last_updated": "2025-02-10T18:36:52.245418+00:00"
+                        "last_updated": "2024-02-10T18:36:52.245418+00:00"
+                    }, {
+                        "entity_id": "sensor.ws2900_v2_02_03_humidity",
+                        "state": "85",
+                        "attributes": {
+                            "state_class": "measurement",
+                            "unit_of_measurement": "%",
+                            "device_class": "humidity",
+                            "friendly_name": "WS2900_V2.02.03 Humidity"
+                        }
+                    }, {
+                        "entity_id": "sensor.ws2900_v2_02_03_wind_direction",
+                        "state": "180",
+                        "attributes": {
+                            "state_class": "measurement",
+                            "unit_of_measurement": "°",
+                            "friendly_name": "WS2900_V2.02.03 Wind Direction"
+                        }
                     }]
                 }
             }

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { sensorConfig } from '../config/sensors';
 import WeatherChart from './WeatherChart';
+import WindCompass from './WindCompass';
 
 const glow = keyframes`
   0% {
@@ -69,6 +70,13 @@ const ErrorMessage = styled.div`
   margin: 20px;
 `;
 
+const WarningMessage = styled.div`
+  color: ${props => props.level === 'high' ? '#ff4444' : '#ffff44'};
+  font-size: 0.9em;
+  margin-top: 5px;
+  text-align: center;
+`;
+
 const WeatherDisplay = ({ data, error }) => {
   const [historicalData, setHistoricalData] = useState({});
 
@@ -107,6 +115,43 @@ const WeatherDisplay = ({ data, error }) => {
     }
   }, [data]);
 
+  const renderValue = (sensor, config) => {
+    const value = formatValue(sensor.state, config.precision);
+
+    if (sensor.entity_id === 'sensor.ws2900_v2_02_03_wind_direction') {
+      const speedSensor = data.find(s => s.entity_id === 'sensor.ws2900_v2_02_03_wind_speed');
+      const gustSensor = data.find(s => s.entity_id === 'sensor.ws2900_v2_02_03_wind_gust');
+      return (
+        <WindCompass 
+          direction={sensor.state}
+          speed={speedSensor?.state}
+          gust={gustSensor?.state}
+        />
+      );
+    }
+
+    if (sensor.entity_id === 'sensor.ws2900_v2_02_03_uv_index') {
+      return (
+        <>
+          <Value>
+            {value}
+            {sensor.attributes.unit_of_measurement}
+          </Value>
+          <WarningMessage level={parseFloat(value) >= 6 ? 'high' : 'medium'}>
+            {config.getWarning(value)}
+          </WarningMessage>
+        </>
+      );
+    }
+
+    return (
+      <Value>
+        {value}
+        {config.unit || sensor.attributes.unit_of_measurement}
+      </Value>
+    );
+  };
+
   if (error) {
     return <ErrorMessage>{error}</ErrorMessage>;
   }
@@ -120,13 +165,10 @@ const WeatherDisplay = ({ data, error }) => {
             <Label>
               {config.icon} {config.name || sensor.attributes.friendly_name}
             </Label>
-            <Value>
-              {formatValue(sensor.state, config.precision)}
-              {sensor.attributes.unit_of_measurement}
-            </Value>
+            {renderValue(sensor, config)}
             <WeatherChart 
               data={historicalData[sensor.entity_id]}
-              unit={sensor.attributes.unit_of_measurement}
+              unit={config.unit || sensor.attributes.unit_of_measurement}
               precision={config.precision}
             />
             <LastUpdated>
