@@ -15,21 +15,26 @@ CACHE_TTL = 60  # seconds
 def get_cached_data() -> Optional[list]:
     """Get cached sensor data if it's still valid"""
     if not sensor_cache:
+        print("Cache is empty")
         return None
         
     data, timestamp = sensor_cache.get('sensors', (None, None))
     if not data or not timestamp:
+        print("No data or timestamp in cache")
         return None
         
     age = (datetime.now() - timestamp).total_seconds()
     if age > CACHE_TTL:
+        print(f"Cache expired ({age:.1f} seconds old)")
         return None
         
+    print(f"Cache hit! Data is {age:.1f} seconds old")
     return data
 
 def update_cache(data: list) -> None:
     """Update the cache with new sensor data"""
     sensor_cache['sensors'] = (data, datetime.now())
+    print(f"Cache updated with {len(data)} sensors at {datetime.now().strftime('%H:%M:%S')}")
 
 # Debug route to check if API is accessible
 @router.get("/ping")
@@ -129,10 +134,10 @@ async def get_sensor_data():
     # Check cache first
     cached_data = get_cached_data()
     if cached_data:
-        print("Returning cached data")
+        print("✅ Returning cached data")
         return cached_data
         
-    print("Cache miss, fetching fresh data")
+    print("❌ Cache miss, fetching fresh data from Home Assistant")
     headers = {
         "Authorization": f"Bearer {settings.HASS_TOKEN}",
         "Content-Type": "application/json",
