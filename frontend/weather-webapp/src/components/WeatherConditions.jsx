@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import styled from 'styled-components';
+import { LanguageContext } from '../contexts/LanguageContext';
+import { translations } from '../config/translations';
 
 const ConditionsContainer = styled.div`
   margin: 15px 0;
@@ -485,6 +487,9 @@ const WarningHeader = styled.div`
 `;
 
 const WeatherConditions = ({ currentData, pressureHistory }) => {
+  const { language } = useContext(LanguageContext);
+  const t = translations[language];
+
   const currentSeason = getCurrentSeason();
   
   const temp = currentData.find(s => s.entity_id.includes('temperature'))?.state;
@@ -537,13 +542,13 @@ const WeatherConditions = ({ currentData, pressureHistory }) => {
 
   return (
     <ConditionsContainer>
-      <Header>Prognoza</Header>
+      <Header>{t.headers.forecast}</Header>
       <Condition>
-        Trenutni uslovi: {currentCondition}
+        {t.headers.currentConditions}: {currentCondition}
       </Condition>
       {allPredictions.length > 0 && (
         <>
-          <WarningHeader>Upozorenja</WarningHeader>
+          <WarningHeader>{t.headers.warnings}</WarningHeader>
           <DetailedPrediction>
             {allPredictions.map((pred, index) => (
               <PredictionItem key={index} severity={pred.severity}>

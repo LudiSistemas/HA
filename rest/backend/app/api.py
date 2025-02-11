@@ -299,5 +299,27 @@ async def get_stats():
         'last_24h_visits': sum(analytics_data['hourly_stats'].values()),
         'hourly_stats': dict(analytics_data['hourly_stats']),
         'sensor_stats': dict(analytics_data['sensor_requests'])
-    } 
+    }
+
+# Add new endpoint to get user's country
+@router.get("/user-location")
+async def get_user_location(request: Request):
+    """Get user's country based on IP"""
+    try:
+        # Get client IP from Cloudflare or fallback to direct IP
+        client_ip = request.headers.get('cf-connecting-ip') or request.headers.get('x-real-ip') or request.client.host
+        
+        # Use ip-api.com (free service) to get location
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f'http://ip-api.com/json/{client_ip}')
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    'country': data.get('country'),
+                    'countryCode': data.get('countryCode')
+                }
+            return {'country': 'Unknown', 'countryCode': 'UN'}
+    except Exception as e:
+        logger.error(f"Error getting location: {e}")
+        return {'country': 'Unknown', 'countryCode': 'UN'}
     
