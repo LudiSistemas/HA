@@ -36,17 +36,174 @@ const PredictionItem = styled.div`
   margin: 5px 0;
 `;
 
-const getWeatherCondition = (temp, humidity, pressure, windSpeed, windGust, rain) => {
+const SEASONS = {
+  WINTER: { start: '12-01', end: '02-28', name: 'zima' },
+  SPRING: { start: '03-01', end: '05-31', name: 'proleće' },
+  SUMMER: { start: '06-01', end: '08-31', name: 'leto' },
+  AUTUMN: { start: '09-01', end: '11-30', name: 'jesen' }
+};
+
+// Seasonal norms for Niš (42°52'N 21°32'E)
+const SEASONAL_NORMS = {
+  WINTER: {
+    temp: { min: -2, max: 8 },
+    pressure: { normal: 1018 },
+    humidity: { normal: 80 },
+    description: 'hladno sa mogućim snegom'
+  },
+  SPRING: {
+    temp: { min: 8, max: 22 },
+    pressure: { normal: 1015 },
+    humidity: { normal: 65 },
+    description: 'promenljivo sa kišom'
+  },
+  SUMMER: {
+    temp: { min: 15, max: 32 },
+    pressure: { normal: 1013 },
+    humidity: { normal: 55 },
+    description: 'toplo i suvo'
+  },
+  AUTUMN: {
+    temp: { min: 5, max: 20 },
+    pressure: { normal: 1016 },
+    humidity: { normal: 70 },
+    description: 'umereno sa kišom'
+  }
+};
+
+// Add day/night variations
+const DAY_NIGHT_NORMS = {
+  DAY: {
+    WINTER: { temp: { min: 0, max: 8 }, humidity: { min: 65, max: 85 } },
+    SPRING: { temp: { min: 12, max: 22 }, humidity: { min: 55, max: 75 } },
+    SUMMER: { temp: { min: 20, max: 32 }, humidity: { min: 45, max: 65 } },
+    AUTUMN: { temp: { min: 10, max: 20 }, humidity: { min: 60, max: 80 } }
+  },
+  NIGHT: {
+    WINTER: { temp: { min: -2, max: 4 }, humidity: { min: 75, max: 90 } },
+    SPRING: { temp: { min: 8, max: 15 }, humidity: { min: 65, max: 85 } },
+    SUMMER: { temp: { min: 15, max: 25 }, humidity: { min: 55, max: 75 } },
+    AUTUMN: { temp: { min: 5, max: 15 }, humidity: { min: 70, max: 85 } }
+  }
+};
+
+const getCurrentSeason = () => {
+  const now = new Date();
+  const monthDay = now.toLocaleString('en-US', { month: '2-digit', day: '2-digit' });
+  
+  for (const [season, { start, end }] of Object.entries(SEASONS)) {
+    if (monthDay >= start && monthDay <= end) {
+      return season;
+    }
+  }
+  return 'WINTER'; // Default for edge cases
+};
+
+const getSunriseSunset = () => {
+  // Approximate sunrise/sunset times for Niš based on season
+  const now = new Date();
+  const month = now.getMonth();
+  
+  // Times are adjusted for Niš's location
+  if (month >= 11 || month <= 1) { // Winter
+    return { sunrise: '07:00', sunset: '16:00' };
+  } else if (month >= 2 && month <= 4) { // Spring
+    return { sunrise: '05:30', sunset: '19:00' };
+  } else if (month >= 5 && month <= 7) { // Summer
+    return { sunrise: '05:00', sunset: '20:30' };
+  } else { // Autumn
+    return { sunrise: '06:00', sunset: '17:30' };
+  }
+};
+
+const isDaytime = () => {
+  const now = new Date();
+  const currentTime = now.toLocaleTimeString('en-US', { hour12: false });
+  const { sunrise, sunset } = getSunriseSunset();
+  return currentTime >= sunrise && currentTime <= sunset;
+};
+
+const getTimeOfDay = () => {
+  const now = new Date();
+  const hours = now.getHours();
+  
+  if (hours >= 22 || hours < 4) return 'noć';
+  if (hours >= 4 && hours < 7) return 'rano jutro';
+  if (hours >= 7 && hours < 11) return 'jutro';
+  if (hours >= 11 && hours < 14) return 'podne';
+  if (hours >= 14 && hours < 18) return 'poslepodne';
+  if (hours >= 18 && hours < 22) return 'veče';
+  return 'noć';
+};
+
+const getSeasonalPrediction = (temp, humidity, pressure, season) => {
+  const predictions = [];
+  const timeOfDay = getTimeOfDay();
+  const dayNightNorms = isDaytime() ? DAY_NIGHT_NORMS.DAY[season] : DAY_NIGHT_NORMS.NIGHT[season];
+
+  // Temperature anomalies for time of day
+  const tempDiff = temp - (dayNightNorms.temp.max + dayNightNorms.temp.min) / 2;
+  if (Math.abs(tempDiff) > 3) {
+    predictions.push({
+      message: tempDiff > 0 
+        ? `🌡️ Temperatura je ${tempDiff.toFixed(1)}°C iznad proseka za ${timeOfDay}`
+        : `❄️ Temperatura je ${Math.abs(tempDiff).toFixed(1)}°C ispod proseka za ${timeOfDay}`,
+      severity: Math.abs(tempDiff) > 5 ? 'high' : 'medium',
+      priority: 2
+    });
+  }
+
+  // Night-specific predictions
+  if (!isDaytime()) {
+    const tempDrop = temp - dayNightNorms.temp.max;
+    if (tempDrop < -8) {
+      predictions.push({
+        message: '❄️ Značajan noćni pad temperature',
+        severity: 'medium',
+        priority: 2
+      });
+    }
+    
+    if (humidity > dayNightNorms.humidity.max) {
+      predictions.push({
+        message: '💧 Povećana vlažnost tokom noći - moguća rosa ili magla',
+        severity: 'low',
+        priority: 3
+      });
+    }
+  }
+
+  // Day-specific predictions
+  if (isDaytime() && season === 'SUMMER' && temp > dayNightNorms.temp.max) {
+    predictions.push({
+      message: '☀️ Visoke dnevne temperature - preporučuje se izbegavanje sunca',
+      severity: 'high',
+      priority: 1
+    });
+  }
+
+  return predictions;
+};
+
+const getWeatherCondition = (temp, humidity, pressure, windSpeed, windGust, rain, season) => {
   if (!temp || !humidity || !pressure) return null;
 
+  const norms = SEASONAL_NORMS[season];
+  const timeOfDay = getTimeOfDay();
+  const dayNightNorms = isDaytime() ? DAY_NIGHT_NORMS.DAY[season] : DAY_NIGHT_NORMS.NIGHT[season];
   let conditions = [];
   
-  // Temperature based conditions
-  if (temp <= 0) conditions.push('❄️ Hladno');
-  else if (temp <= 10) conditions.push('🌡️ Sveže');
-  else if (temp <= 20) conditions.push('🌡️ Prijatno');
-  else if (temp <= 30) conditions.push('🌡️ Toplo');
-  else conditions.push('🌡️ Veoma toplo');
+  // Time of day indicator
+  conditions.push(isDaytime() ? '☀️' : '🌙');
+  
+  // Temperature conditions with day/night context
+  if (temp < dayNightNorms.temp.min) {
+    conditions.push(`❄️ Hladno za ${timeOfDay}`);
+  } else if (temp > dayNightNorms.temp.max) {
+    conditions.push(`🌡️ Toplo za ${timeOfDay}`);
+  } else {
+    conditions.push('🌡️ Prijatno');
+  }
   
   // Humidity based conditions
   if (humidity > 85) conditions.push('💧 Veoma vlažno');
@@ -68,7 +225,16 @@ const getWeatherCondition = (temp, humidity, pressure, windSpeed, windGust, rain
     else conditions.push('⛈️ Jaka kiša');
   }
   
-  return conditions.join(' • ') || '🌥️ Umereno';
+  // Seasonal specific conditions
+  if (season === 'WINTER' && temp <= 0 && humidity > 80) {
+    conditions.push('🌨️ Mogući sneg');
+  }
+  
+  if (season === 'SUMMER' && temp > 30 && humidity > 60) {
+    conditions.push('🌡️ Sparno');
+  }
+
+  return conditions.join(' • ');
 };
 
 const getPressureTrend = (pressureHistory) => {
@@ -144,6 +310,8 @@ const getWindPrediction = (windSpeed, windGust, windDir) => {
 };
 
 const WeatherConditions = ({ currentData, pressureHistory }) => {
+  const currentSeason = getCurrentSeason();
+  
   const temp = currentData.find(s => s.entity_id.includes('temperature'))?.state;
   const humidity = currentData.find(s => s.entity_id.includes('humidity'))?.state;
   const pressure = currentData.find(s => s.entity_id.includes('pressure'))?.state;
@@ -158,15 +326,24 @@ const WeatherConditions = ({ currentData, pressureHistory }) => {
     parseFloat(pressure),
     parseFloat(windSpeed),
     parseFloat(windGust),
-    parseFloat(rain)
+    parseFloat(rain),
+    currentSeason
   );
   
   const pressurePredictions = getPressureTrend(pressureHistory);
   const windPredictions = getWindPrediction(windSpeed, windGust, windDir);
   
+  const seasonalPredictions = getSeasonalPrediction(
+    parseFloat(temp),
+    parseFloat(humidity),
+    parseFloat(pressure),
+    currentSeason
+  );
+
   const allPredictions = [
     ...(pressurePredictions || []),
-    ...(windPredictions || [])
+    ...(windPredictions || []),
+    ...(seasonalPredictions || [])
   ].sort((a, b) => a.priority - b.priority);
 
   if (!currentCondition) return null;
