@@ -141,7 +141,7 @@ class SensorData(BaseModel):
             elif self.sensor_type == "humidity":
                 return 0 <= value <= 100
             elif self.sensor_type == "pressure":
-                return 800 <= value <= 1200
+                return 900 <= value <= 1100
             elif self.sensor_type == "wind":
                 return 0 <= value <= 360 if "direction" in self.entity_id else value >= 0
             elif self.sensor_type == "uv":
@@ -168,7 +168,7 @@ def parse_sensor_ids(sensor_ids):
 
 def calculate_relative_pressure(absolute_pressure: float, altitude: float, temperature: float) -> float:
     """
-    Calculate sea level pressure using the international barometric formula
+    Calculate sea level pressure using the simplified barometric formula
     
     Parameters:
     - absolute_pressure: Pressure in hPa
@@ -178,17 +178,11 @@ def calculate_relative_pressure(absolute_pressure: float, altitude: float, tempe
     Returns:
     - Sea level pressure in hPa
     """
-    # Constants
-    Ch = 0.0065  # Temperature lapse rate (K/m)
-    M = 0.0289644  # Molar mass of dry air (kg/mol)
-    R = 8.31432  # Universal gas constant (N⋅m/(mol⋅K))
-    g = 9.80665  # Gravitational acceleration (m/s^2)
-    
     # Convert temperature to Kelvin
     T = temperature + 273.15
     
-    # Calculate sea level pressure using the international barometric formula
-    sea_level_pressure = absolute_pressure * (1 + ((g * M * altitude)/(R * T))) ** (1/((Ch * R)/(g * M)))
+    # Simplified barometric formula
+    sea_level_pressure = absolute_pressure * (1 + ((0.0065 * altitude) / T)) ** 5.257
     
     return round(sea_level_pressure, 1)
 
