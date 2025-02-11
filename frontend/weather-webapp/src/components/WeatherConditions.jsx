@@ -227,7 +227,7 @@ const getWeatherCondition = (temp, humidity, pressure, windSpeed, windGust, rain
   
   // Seasonal specific conditions
   if (season === 'WINTER' && temp <= 0 && humidity > 80) {
-    conditions.push('🌨️ Mogući sneg');
+    conditions.push('🌨️ Moguć sneg');
   }
   
   if (season === 'SUMMER' && temp > 30 && humidity > 60) {
@@ -309,6 +309,24 @@ const getWindPrediction = (windSpeed, windGust, windDir) => {
   return predictions;
 };
 
+const Header = styled.div`
+  color: #0ff;
+  font-size: 1.3em;
+  font-weight: bold;
+  margin-bottom: 15px;
+  text-align: center;
+  border-bottom: 1px solid #0ff3;
+  padding-bottom: 10px;
+`;
+
+const WarningHeader = styled.div`
+  color: #ff4d4d;
+  font-size: 1.1em;
+  margin-top: 20px;
+  margin-bottom: 10px;
+  text-align: center;
+`;
+
 const WeatherConditions = ({ currentData, pressureHistory }) => {
   const currentSeason = getCurrentSeason();
   
@@ -350,16 +368,22 @@ const WeatherConditions = ({ currentData, pressureHistory }) => {
 
   return (
     <ConditionsContainer>
+      <Header>Prognoza</Header>
       <Condition>
         Trenutni uslovi: {currentCondition}
       </Condition>
-      <DetailedPrediction>
-        {allPredictions.map((pred, index) => (
-          <PredictionItem key={index} severity={pred.severity}>
-            {pred.message}
-          </PredictionItem>
-        ))}
-      </DetailedPrediction>
+      {allPredictions.length > 0 && (
+        <>
+          <WarningHeader>Upozorenja</WarningHeader>
+          <DetailedPrediction>
+            {allPredictions.map((pred, index) => (
+              <PredictionItem key={index} severity={pred.severity}>
+                {pred.message}
+              </PredictionItem>
+            ))}
+          </DetailedPrediction>
+        </>
+      )}
     </ConditionsContainer>
   );
 };
