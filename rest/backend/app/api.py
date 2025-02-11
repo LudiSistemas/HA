@@ -372,6 +372,12 @@ async def get_sensor_data(request: Request):
 async def get_sensor_history(sensor_id: str, request: Request, offset: int = 0):
     """Returns 24 hours of data for a sensor with specified offset in days"""
     try:
+        # Add headers for Home Assistant API
+        headers = {
+            "Authorization": f"Bearer {settings.HASS_TOKEN}",
+            "Content-Type": "application/json",
+        }
+        
         # Calculate timestamps for the requested period
         now = datetime.now()
         
@@ -426,7 +432,7 @@ async def get_sensor_history(sensor_id: str, request: Request, offset: int = 0):
                             'history': filtered_history,
                             'start_time': start_time_iso,
                             'end_time': end_time_iso,
-                            'has_more': True  # Add flag to indicate if more history is available
+                            'has_more': True
                         }
                         return stats
                     
