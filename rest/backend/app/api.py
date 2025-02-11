@@ -371,16 +371,14 @@ async def get_sensor_data(request: Request):
 @router.get("/sensors/{sensor_id}/history")
 async def get_sensor_history(sensor_id: str, request: Request, offset: int = 0):
     """Returns 24 hours of data for a sensor with specified offset in days"""
-    update_analytics(request)
-    analytics_data['sensor_requests'][sensor_id] += 1
-    headers = {
-        "Authorization": f"Bearer {settings.HASS_TOKEN}",
-        "Content-Type": "application/json",
-    }
-    
     try:
         # Calculate timestamps for the requested period
         now = datetime.now()
+        
+        # Don't allow fetching future data
+        if offset < 0:
+            raise HTTPException(status_code=400, detail="Cannot fetch future data")
+            
         end_time = now - timedelta(days=offset)
         start_time = end_time - timedelta(hours=24)
         
@@ -397,7 +395,7 @@ async def get_sensor_history(sensor_id: str, request: Request, offset: int = 0):
                 params={
                     "filter_entity_id": sensor_id,
                     "end_time": end_time_iso,
-                    "minimal_response": False  # Changed to get full response with timestamps
+                    "minimal_response": False
                 }
             )
             
@@ -413,7 +411,6 @@ async def get_sensor_history(sensor_id: str, request: Request, offset: int = 0):
                         try:
                             if item['state'].replace('-', '').replace('.', '').isdigit():
                                 value = float(item['state'])
-                                # Ensure we have last_updated field
                                 if 'last_updated' not in item:
                                     item['last_updated'] = item.get('last_changed')
                                 values.append(value)
@@ -428,14 +425,21 @@ async def get_sensor_history(sensor_id: str, request: Request, offset: int = 0):
                             'current': values[-1],
                             'history': filtered_history,
                             'start_time': start_time_iso,
-                            'end_time': end_time_iso
+                            'end_time': end_time_iso,
+                            'has_more': True  # Add flag to indicate if more history is available
                         }
-                        # Log the first few items to verify structure
-                        logger.info(f"Sample history items: {filtered_history[:2]}")
                         return stats
                     
-                logger.warning(f"No valid data found for {sensor_id} in the specified period")
-                raise HTTPException(status_code=404, detail="No data found for the specified period")
+                # Return empty data structure when no data is found
+                return {
+                    'min': None,
+                    'max': None,
+                    'current': None,
+                    'history': [],
+                    'start_time': start_time_iso,
+                    'end_time': end_time_iso,
+                    'has_more': False
+                }
                     
             logger.error(f"Error fetching history: HTTP {response.status_code}")
             raise HTTPException(status_code=response.status_code, detail="Error fetching history")

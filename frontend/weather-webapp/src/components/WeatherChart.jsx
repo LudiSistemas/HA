@@ -119,6 +119,10 @@ const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
       
       if (response.ok) {
         const newData = await response.json();
+        if (newData.history.length === 0) {
+          setError('Nema podataka za izabrani period');
+          return;
+        }
         setChartData(newData);
       } else {
         const errorData = await response.json();
@@ -190,51 +194,63 @@ const WeatherChart = ({ data, unit, precision, sensorType, entityId }) => {
   return (
     <>
       <ChartContainer>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart 
-            data={processedData}
-            margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
-          >
-            <XAxis
-              dataKey="time"
-              type="number"
-              domain={[
-                processedData[0]?.time || 0,
-                processedData[processedData.length - 1]?.time || 0
-              ]}
-              tickFormatter={(time) => new Date(time).toLocaleTimeString()}
-              stroke="#666"
-            />
-            <YAxis
-              stroke="#666"
-              domain={sensorType === 'rain' ? [0, 'auto'] : ['auto', 'auto']}
-            />
-            <Tooltip
-              contentStyle={{ 
-                background: '#1a1a2e', 
-                border: '1px solid #0ff',
-                borderRadius: '4px',
-                padding: '8px'
-              }}
-              labelFormatter={(time) => new Date(time).toLocaleString()}
-              formatter={(value) => [value.toFixed(precision) + unit]}
-            />
-            {chartData.min !== undefined && (
-              <ReferenceLine y={chartData.min} stroke="#4444ff" strokeDasharray="3 3" />
-            )}
-            {chartData.max !== undefined && (
-              <ReferenceLine y={chartData.max} stroke="#ff4444" strokeDasharray="3 3" />
-            )}
-            <Line
-              type="monotone"
-              dataKey="value"
-              stroke="#0ff"
-              dot={false}
-              strokeWidth={2}
-              isAnimationActive={false}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+        {processedData.length > 0 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart 
+              data={processedData}
+              margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+            >
+              <XAxis
+                dataKey="time"
+                type="number"
+                domain={[
+                  processedData[0]?.time || 0,
+                  processedData[processedData.length - 1]?.time || 0
+                ]}
+                tickFormatter={(time) => new Date(time).toLocaleTimeString()}
+                stroke="#666"
+              />
+              <YAxis
+                stroke="#666"
+                domain={sensorType === 'rain' ? [0, 'auto'] : ['auto', 'auto']}
+              />
+              <Tooltip
+                contentStyle={{ 
+                  background: '#1a1a2e', 
+                  border: '1px solid #0ff',
+                  borderRadius: '4px',
+                  padding: '8px'
+                }}
+                labelFormatter={(time) => new Date(time).toLocaleString()}
+                formatter={(value) => [value.toFixed(precision) + unit]}
+              />
+              {chartData.min !== undefined && (
+                <ReferenceLine y={chartData.min} stroke="#4444ff" strokeDasharray="3 3" />
+              )}
+              {chartData.max !== undefined && (
+                <ReferenceLine y={chartData.max} stroke="#ff4444" strokeDasharray="3 3" />
+              )}
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke="#0ff"
+                dot={false}
+                strokeWidth={2}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <div style={{ 
+            height: '100%', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            color: '#888' 
+          }}>
+            Nema podataka za prikaz
+          </div>
+        )}
       </ChartContainer>
       <NavigationButtons>
         <NavButton 
