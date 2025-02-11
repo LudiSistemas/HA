@@ -80,6 +80,15 @@ class SensorData(BaseModel):
         except ValueError:
             return False
 
+def parse_sensor_ids(sensor_ids):
+    """Parse sensor IDs from various formats"""
+    if isinstance(sensor_ids, list):
+        return sensor_ids
+    
+    # Remove square brackets and extra quotes if present
+    cleaned = sensor_ids.strip('[]"\' ')
+    return [s.strip() for s in cleaned.split(',')]
+
 @router.get(
     "/sensors",
     response_model=List[SensorData],
@@ -144,12 +153,8 @@ async def get_sensor_data():
         async with httpx.AsyncClient() as client:
             responses = []
             
-            # Ensure we have a list of sensor IDs
-            if isinstance(settings.SENSOR_IDS, str):
-                sensor_ids = [s.strip() for s in settings.SENSOR_IDS.split(',')]
-            else:
-                sensor_ids = settings.SENSOR_IDS
-
+            # Parse sensor IDs using the new helper function
+            sensor_ids = parse_sensor_ids(settings.SENSOR_IDS)
             print(f"Fetching data for sensors: {sensor_ids}")  # Debug log
             
             for sensor_id in sensor_ids:
