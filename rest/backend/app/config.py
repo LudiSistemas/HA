@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic import BaseSettings, Field
 from typing import Union, List
 
 class Settings(BaseSettings):
@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     HASS_TOKEN: str
     SENSOR_IDS: Union[str, List[str]]  # Can be either string or list
     ENVIRONMENT: str = "development"  # default value
+    STATION_ALTITUDE: float = Field(default=230.0, env='STATION_ALTITUDE')  # Explicitly bind to env variable
 
     class Config:
         env_file = ".env"
@@ -19,4 +20,4 @@ class Settings(BaseSettings):
             return [s.strip() for s in self.SENSOR_IDS.split(',')]
         return self.SENSOR_IDS
 
-settings = Settings() 
+settings = Settings(_env_file='.env')  # Explicitly specify env file 
