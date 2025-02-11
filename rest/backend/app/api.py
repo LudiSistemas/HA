@@ -156,14 +156,14 @@ async def get_sensor_data():
         async with httpx.AsyncClient() as client:
             responses = []
             
-            # Parse sensor IDs using the new helper function
-            sensor_ids = parse_sensor_ids(settings.SENSOR_IDS)
-            print(f"Fetching data for sensors (parsed): {sensor_ids}")  # Debug log
+            # Use the sensor_list property instead of parsing
+            sensor_ids = settings.sensor_list
+            print(f"Fetching data for sensors: {sensor_ids}")
             
             for sensor_id in sensor_ids:
                 try:
                     url = f"{settings.HASS_URL}/api/states/{sensor_id}"
-                    print(f"Fetching: {url}")  # Debug log
+                    print(f"Fetching: {url}")
                     
                     response = await client.get(
                         url,
