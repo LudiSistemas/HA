@@ -32,14 +32,14 @@ const WeatherChart = ({ data, unit, precision, sensorType }) => {
   const formatValue = (value) => Number(value).toFixed(precision);
 
   // Process data for chart
-  const chartData = data.history.map(item => ({
+  let chartData = data.history.map(item => ({
     time: new Date(item.last_updated).getTime(),
     value: parseFloat(item.state)
   }));
 
   // Special handling for rain data
   if (sensorType === 'rain') {
-    return chartData.filter((item, index, arr) => {
+    chartData = chartData.filter((item, index, arr) => {
       const value = item.value;
       const prevValue = index > 0 ? arr[index - 1].value : 0;
       return value > 0 || prevValue > 0;
