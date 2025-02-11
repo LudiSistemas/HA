@@ -9,6 +9,9 @@ from collections import defaultdict
 from ipaddress import ip_address
 import time
 from math import exp
+import json
+import os
+from pathlib import Path
 
 # Get the FastAPI logger
 logger = logging.getLogger("main")
@@ -20,13 +23,57 @@ router = APIRouter(prefix="/api", tags=["sensors"])
 sensor_cache: Dict[str, Tuple[list, datetime]] = {}
 CACHE_TTL = 60  # seconds
 
-# Analytics storage
-analytics_data = {
-    'total_visits': 0,
-    'unique_visitors': set(),
-    'hourly_stats': defaultdict(int),
-    'sensor_requests': defaultdict(int),
-}
+# Define path for analytics data
+ANALYTICS_FILE = Path(__file__).parent.parent / 'data' / 'analytics.json'
+
+def load_analytics():
+    """Load analytics data from file"""
+    try:
+        if ANALYTICS_FILE.exists():
+            with open(ANALYTICS_FILE, 'r') as f:
+                data = json.load(f)
+                return {
+                    'total_visits': data.get('total_visits', 0),
+                    'unique_visitors': set(data.get('unique_visitors', [])),
+                    'hourly_stats': defaultdict(int, data.get('hourly_stats', {})),
+                    'sensor_requests': defaultdict(int, data.get('sensor_requests', {})),
+                    'last_save': data.get('last_save', datetime.now().isoformat())
+                }
+    except Exception as e:
+        logger.error(f"Error loading analytics: {e}")
+    
+    return {
+        'total_visits': 0,
+        'unique_visitors': set(),
+        'hourly_stats': defaultdict(int),
+        'sensor_requests': defaultdict(int),
+        'last_save': datetime.now().isoformat()
+    }
+
+def save_analytics(data):
+    """Save analytics data to file"""
+    try:
+        # Create data directory if it doesn't exist
+        ANALYTICS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Prepare data for saving
+        save_data = {
+            'total_visits': data['total_visits'],
+            'unique_visitors': list(data['unique_visitors']),  # Convert set to list
+            'hourly_stats': dict(data['hourly_stats']),
+            'sensor_requests': dict(data['sensor_requests']),
+            'last_save': datetime.now().isoformat()
+        }
+        
+        with open(ANALYTICS_FILE, 'w') as f:
+            json.dump(save_data, f)
+            
+        logger.info("Analytics data saved successfully")
+    except Exception as e:
+        logger.error(f"Error saving analytics: {e}")
+
+# Initialize analytics from file
+analytics_data = load_analytics()
 
 def get_cached_data() -> Optional[list]:
     """Get cached sensor data if it's still valid"""
@@ -65,16 +112,20 @@ def update_analytics(request: Request):
         analytics_data['unique_visitors'].add(client_ip)
         
         # Update hourly stats
-        current_hour = time.strftime('%Y-%m-%d %H:00')
+        current_hour = datetime.now().strftime('%Y-%m-%d %H:00')
         analytics_data['hourly_stats'][current_hour] += 1
         
         # Clean up old hourly stats (keep last 24 hours)
-        cutoff = time.time() - (24 * 3600)
+        cutoff = datetime.now() - timedelta(hours=24)
         analytics_data['hourly_stats'] = {
             k: v for k, v in analytics_data['hourly_stats'].items()
-            if time.strptime(k, '%Y-%m-%d %H:00').timestamp() > cutoff
+            if datetime.strptime(k, '%Y-%m-%d %H:00') > cutoff
         }
         
+        # Save to file periodically (every 10 visits)
+        if analytics_data['total_visits'] % 10 == 0:
+            save_analytics(analytics_data)
+            
     except Exception as e:
         logger.error(f"Error updating analytics: {e}")
 
@@ -348,13 +399,24 @@ async def get_sensor_history(sensor_id: str, request: Request):
 @router.get("/stats")
 async def get_stats():
     """Get site statistics"""
-    return {
-        'total_visits': analytics_data['total_visits'],
-        'unique_visitors': len(analytics_data['unique_visitors']),
-        'last_24h_visits': sum(analytics_data['hourly_stats'].values()),
-        'hourly_stats': dict(analytics_data['hourly_stats']),
-        'sensor_stats': dict(analytics_data['sensor_requests'])
-    }
+    try:
+        # Calculate visits in last 24h
+        cutoff = datetime.now() - timedelta(hours=24)
+        last_24h_visits = sum(
+            count for timestamp, count in analytics_data['hourly_stats'].items()
+            if datetime.strptime(timestamp, '%Y-%m-%d %H:00') > cutoff
+        )
+        
+        return {
+            'total_visits': analytics_data['total_visits'],
+            'unique_visitors': len(analytics_data['unique_visitors']),
+            'last_24h_visits': last_24h_visits,
+            'hourly_stats': dict(analytics_data['hourly_stats']),
+            'sensor_stats': dict(analytics_data['sensor_requests'])
+        }
+    except Exception as e:
+        logger.error(f"Error getting stats: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving statistics")
 
 # Add new endpoint to get user's country
 @router.get("/user-location")

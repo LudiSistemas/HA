@@ -9,6 +9,11 @@ from app.config import settings
 import time
 import os
 import logging
+from pathlib import Path
+
+# Create data directory if it doesn't exist
+data_dir = Path(__file__).parent / 'data'
+data_dir.mkdir(exist_ok=True)
 
 # Create limiter instance
 limiter = Limiter(key_func=get_remote_address)
