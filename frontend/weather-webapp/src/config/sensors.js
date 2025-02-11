@@ -45,6 +45,11 @@ export const sensorConfig = {
     precision: 0,
     type: 'compass'
   },
+  'sensor.ws2900_v2_02_03_wind_speed': {
+    name: 'Brzina vetra',
+    icon: '💨',
+    precision: 1
+  },
   'sensor.ws2900_v2_02_03_wind_gust': {
     name: 'Udari vetra',
     icon: '💨',
