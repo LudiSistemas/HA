@@ -37,8 +37,9 @@ const WeatherCard = styled.div`
   border: 1px solid #0ff;
   animation: ${glow} 2s ease-in-out infinite;
 
-  @media (min-width: 768px) {
-    width: 80%;
+  @media (min-width: 1024px) {
+    width: 65%;
+    max-width: none;
   }
 `;
 

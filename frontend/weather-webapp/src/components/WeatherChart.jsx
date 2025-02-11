@@ -6,6 +6,11 @@ const ChartContainer = styled.div`
   width: 100%;
   height: 200px;
   margin-top: 20px;
+
+  @media (min-width: 1024px) {
+    width: 65%;
+    margin: 20px auto;
+  }
 `;
 
 const StatsContainer = styled.div`
@@ -14,6 +19,11 @@ const StatsContainer = styled.div`
   margin-top: 10px;
   font-size: 0.9em;
   color: #888;
+
+  @media (min-width: 1024px) {
+    width: 65%;
+    margin: 10px auto;
+  }
 `;
 
 const StatItem = styled.div`
@@ -46,24 +56,43 @@ const WeatherChart = ({ data, unit, precision, sensorType }) => {
     });
   }
 
+  // Get time domain to remove gaps
+  const timeRange = chartData.reduce(
+    (acc, item) => ({
+      min: Math.min(acc.min, item.time),
+      max: Math.max(acc.max, item.time),
+    }),
+    { min: Infinity, max: -Infinity }
+  );
+
   return (
     <>
       <ChartContainer>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData}>
+          <LineChart 
+            data={chartData}
+            margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+          >
             <XAxis
               dataKey="time"
               type="number"
-              domain={['auto', 'auto']}
+              domain={[timeRange.min, timeRange.max]}
               tickFormatter={(time) => new Date(time).toLocaleTimeString()}
               stroke="#666"
+              padding={{ left: 0, right: 0 }}
             />
             <YAxis
               stroke="#666"
               domain={sensorType === 'rain' ? [0, 'auto'] : ['auto', 'auto']}
+              padding={{ top: 10, bottom: 10 }}
             />
             <Tooltip
-              contentStyle={{ background: '#1a1a2e', border: '1px solid #0ff' }}
+              contentStyle={{ 
+                background: '#1a1a2e', 
+                border: '1px solid #0ff',
+                borderRadius: '4px',
+                padding: '8px'
+              }}
               labelFormatter={(time) => new Date(time).toLocaleString()}
               formatter={(value) => [value.toFixed(precision) + unit]}
             />
@@ -75,6 +104,7 @@ const WeatherChart = ({ data, unit, precision, sensorType }) => {
               stroke="#0ff"
               dot={false}
               strokeWidth={2}
+              isAnimationActive={false}
             />
           </LineChart>
         </ResponsiveContainer>
