@@ -28,6 +28,6 @@ export const LanguageProvider = ({ children }) => {
   return (
     <LanguageContext.Provider value={{ language, setLanguage }}>
       {children}
-    </LanguageProvider>
+    </LanguageContext.Provider>
   );
 }; 
