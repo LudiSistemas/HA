@@ -10,6 +10,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.weatherstation.presentation.MainViewModel
 import com.weatherstation.presentation.components.WeatherCard
 import com.weatherstation.presentation.components.WindCompass
+import com.weatherstation.presentation.components.WeatherConditions
+import com.weatherstation.util.WeatherAnalyzer
 
 @Composable
 fun MainScreen(
@@ -43,6 +45,14 @@ fun MainScreen(
         }
 
         state.sensors?.let { sensors ->
+            item {
+                WeatherConditions(
+                    prediction = WeatherAnalyzer.analyzeConditions(sensors),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             items(sensors) { sensor ->
                 when {
                     sensor.entityId.contains("wind_direction") -> {
