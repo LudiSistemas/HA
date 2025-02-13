@@ -90,7 +90,48 @@ const componentRegistry = {
 const WeatherDisplay = ({ data, error }) => {
   const [historicalData, setHistoricalData] = useState({});
   
-  // Safely parse the sensor config
+  // Fetch historical data for a sensor
+  const fetchHistory = async (sensorId) => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/sensors/${sensorId}/history`);
+      if (!response.ok) throw new Error('Failed to fetch history');
+      const history = await response.json();
+      return history;
+    } catch (err) {
+      console.error(`Error fetching history for ${sensorId}:`, err);
+      return [];
+    }
+  };
+
+  // Fetch historical data for all configured sensors
+  useEffect(() => {
+    const fetchAllHistory = async () => {
+      if (!data) return;
+
+      try {
+        const configString = import.meta.env.VITE_SENSOR_CONFIG;
+        const sensorConfig = JSON.parse(configString.replace('VITE_SENSOR_CONFIG=', ''));
+        
+        const historyPromises = Object.keys(sensorConfig).map(async (sensorId) => {
+          const history = await fetchHistory(sensorId);
+          return [sensorId, history];
+        });
+
+        const histories = await Promise.all(historyPromises);
+        const historyMap = Object.fromEntries(histories);
+        setHistoricalData(historyMap);
+      } catch (err) {
+        console.error('Error fetching historical data:', err);
+      }
+    };
+
+    fetchAllHistory();
+    // Fetch historical data every 5 minutes
+    const interval = setInterval(fetchAllHistory, 300000);
+    return () => clearInterval(interval);
+  }, [data]);
+
+  // Parse sensor configuration
   let sensorConfig = {};
   try {
     const configString = import.meta.env.VITE_SENSOR_CONFIG;
@@ -100,14 +141,7 @@ const WeatherDisplay = ({ data, error }) => {
     }
   } catch (e) {
     console.error('Failed to parse VITE_SENSOR_CONFIG:', e);
-    console.log('Raw config:', import.meta.env.VITE_SENSOR_CONFIG);
   }
-
-  // Debug logs
-  console.log('Available components:', Object.keys(componentRegistry));
-  console.log('Parsed sensor config:', sensorConfig);
-  console.log('Raw data:', data);
-  console.log('Historical data:', historicalData);
 
   // Filter and sort sensors based on configuration
   const configuredSensors = data?.filter(sensor => 
@@ -116,61 +150,35 @@ const WeatherDisplay = ({ data, error }) => {
     (sensorConfig[a.entity_id]?.position || 0) - (sensorConfig[b.entity_id]?.position || 0)
   );
 
-  console.log('Configured sensors:', configuredSensors);
-
   // Render configured component for each sensor
   const renderSensor = (sensor) => {
     const config = sensorConfig[sensor.entity_id];
-    if (!config) {
-      console.log(`No config found for sensor ${sensor.entity_id}`);
-      return null;
-    }
+    if (!config) return null;
 
     const Component = componentRegistry[config.component];
     if (!Component) {
       console.error(`Component ${config.component} not found in registry`);
-      console.log('Available components:', Object.keys(componentRegistry));
       return null;
     }
 
     console.log(`Rendering ${config.component} for ${sensor.entity_id}`);
+    console.log('Historical data for sensor:', historicalData[sensor.entity_id]);
 
     return (
       <Component 
         key={sensor.entity_id}
         data={{
           ...sensor,
-          history: historicalData[sensor.entity_id]
+          history: historicalData[sensor.entity_id] || []
         }}
         config={config}
       />
     );
   };
 
-  const fetchHistory = async (sensorId) => {
-    try {
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/sensors/${sensorId}/history`);
-      if (response.ok) {
-        const data = await response.json();
-        setHistoricalData(prev => ({
-          ...prev,
-          [sensorId]: data
-        }));
-      }
-    } catch (error) {
-      console.error('Error fetching history:', error);
-    }
-  };
-
-  useEffect(() => {
-    if (data) {
-      data.forEach(sensor => {
-        fetchHistory(sensor.entity_id);
-      });
-    }
-  }, [data]);
-
-  if (error) return <ErrorMessage>{error}</ErrorMessage>;
+  if (error) {
+    return <ErrorMessage>{error}</ErrorMessage>;
+  }
 
   return (
     <Container>
