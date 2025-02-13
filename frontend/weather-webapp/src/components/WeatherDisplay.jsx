@@ -91,13 +91,17 @@ const WeatherDisplay = ({ data, error }) => {
   const [timeOffset, setTimeOffset] = useState(0);
   const [configuredSensors, setConfiguredSensors] = useState([]);
 
+  // Debug incoming data
+  useEffect(() => {
+    console.log('Received data:', data);
+  }, [data]);
+
   // Parse sensor configuration
   useEffect(() => {
     try {
       const configString = import.meta.env.VITE_SENSOR_CONFIG;
       const sensorConfig = JSON.parse(configString);
       
-      // Create array of configured sensors with their config
       const sensors = Object.entries(sensorConfig)
         .map(([sensorId, config]) => ({
           sensorId,
@@ -147,11 +151,15 @@ const WeatherDisplay = ({ data, error }) => {
   };
 
   useEffect(() => {
+    if (!data || Object.keys(data).length === 0) {
+      console.log('No sensor data available yet');
+      return;
+    }
     console.log('Setting up history fetch');
     fetchAllHistory(timeOffset);
     const interval = setInterval(() => fetchAllHistory(timeOffset), 300000);
     return () => clearInterval(interval);
-  }, [configuredSensors, timeOffset]);
+  }, [configuredSensors, timeOffset, data]);
 
   const handleOffsetChange = (newOffset) => {
     setTimeOffset(newOffset);
@@ -168,19 +176,29 @@ const WeatherDisplay = ({ data, error }) => {
       return null;
     }
 
-    const sensorData = data?.[sensorConfig.sensorId];
+    // Check both data structures - direct and nested
+    const sensorData = data?.[sensorConfig.sensorId] || 
+                      data?.states?.[sensorConfig.sensorId] ||
+                      data?.entities?.[sensorConfig.sensorId];
+
+    console.log(`Checking data for ${sensorConfig.sensorId}:`, {
+      directAccess: data?.[sensorConfig.sensorId],
+      statesAccess: data?.states?.[sensorConfig.sensorId],
+      entitiesAccess: data?.entities?.[sensorConfig.sensorId],
+      finalData: sensorData
+    });
+
     if (!sensorData) {
       console.error(`No data found for sensor ${sensorConfig.sensorId}`);
       return null;
     }
-
-    console.log(`Rendering ${sensorConfig.component} for ${sensorConfig.sensorId}`);
 
     return (
       <Component 
         key={sensorConfig.sensorId}
         data={{
           ...sensorData,
+          entity_id: sensorConfig.sensorId,
           history: historicalData[sensorConfig.sensorId]
         }}
         config={sensorConfig}
