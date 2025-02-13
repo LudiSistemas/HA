@@ -10,16 +10,21 @@ const ChartContainer = styled.div`
 `;
 
 const ChartDisplay = ({ data, config }) => {
-  if (!data) return null;
+  console.log('ChartDisplay received data:', data);
+  
+  if (!data || !data.history) {
+    console.log('No data or history available for ChartDisplay');
+    return null;
+  }
 
   return (
     <ChartContainer>
       <h3>{config.display}</h3>
       <WeatherChart 
-        data={data.history}
-        unit={data.unit}
+        data={Array.isArray(data.history) ? data.history : []}
+        unit={data.unit || ''}
         precision={config.precision || 1}
-        sensorType={data.entity_id.includes('rain') ? 'rain' : 'default'}
+        sensorType={data.entity_id?.includes('rain') ? 'rain' : 'default'}
         entityId={data.entity_id}
       />
     </ChartContainer>

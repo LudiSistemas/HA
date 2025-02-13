@@ -89,7 +89,9 @@ const WeatherDisplay = ({ data, error }) => {
   try {
     const configString = import.meta.env.VITE_SENSOR_CONFIG;
     if (configString) {
-      sensorConfig = JSON.parse(configString);
+      // Remove 'VITE_SENSOR_CONFIG=' if it exists in the string
+      const cleanConfigString = configString.replace('VITE_SENSOR_CONFIG=', '');
+      sensorConfig = JSON.parse(cleanConfigString);
     }
   } catch (e) {
     console.error('Failed to parse VITE_SENSOR_CONFIG:', e);
