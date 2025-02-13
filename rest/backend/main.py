@@ -83,11 +83,11 @@ if __name__ == "__main__":
     
     is_dev = os.getenv("ENVIRONMENT", "development") == "development"
     
-    # Basic configuration - no SSL since Nginx handles it
+    # Use port from settings
     config = {
         "app": "main:app",
         "host": "127.0.0.1",  # Only listen on localhost since Nginx proxies
-        "port": 8000,
+        "port": settings.PORT,
         "reload": is_dev
     }
     

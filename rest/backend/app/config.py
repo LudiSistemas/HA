@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     SENSOR_IDS: Union[str, List[str]]  # Can be either string or list
     ENVIRONMENT: str = "development"  # default value
     STATION_ALTITUDE: float = Field(default=230.0)  # Simplified field definition
+    PORT: int = Field(default=8000)  # Add port setting
 
     class Config:
         env_file = ".env"
