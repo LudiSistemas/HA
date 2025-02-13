@@ -4,16 +4,34 @@ import WeatherChart from '../charts/WeatherChart';
 
 const ChartContainer = styled.div`
   padding: 2rem;
-  background: rgba(35, 38, 45, 0.5);
+  background: rgba(35, 38, 45, 0.7);
   border-radius: 25px;
   margin: 1rem auto;
   width: 95%;
   max-width: 1200px;
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-sizing: border-box;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.5),
+              inset 0 0 32px 0 rgba(31, 38, 135, 0.4),
+              0 0 15px 0 rgba(0, 157, 255, 0.25);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(
+      circle at center,
+      rgba(0, 157, 255, 0.08) 0%,
+      rgba(31, 38, 135, 0.08) 100%
+    );
+    pointer-events: none;
+  }
 
   @media (max-width: 768px) {
     width: 100%;
@@ -28,6 +46,12 @@ const ChartContainer = styled.div`
 
   @media (min-width: 1800px) {
     max-width: 1600px;
+  }
+
+  &:hover {
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.6),
+                inset 0 0 32px 0 rgba(31, 38, 135, 0.5),
+                0 0 20px 0 rgba(0, 157, 255, 0.35);
   }
 `;
 
