@@ -75,9 +75,7 @@ const NavButton = styled.button`
   }
 `;
 
-const ChartDisplay = ({ data, config }) => {
-  const [offset, setOffset] = useState(0);
-
+const ChartDisplay = ({ data, config, onOffsetChange, currentOffset }) => {
   // Early validation of required props
   if (!data) {
     console.log('No data provided to ChartDisplay');
@@ -100,16 +98,17 @@ const ChartDisplay = ({ data, config }) => {
     historyData,
     min,
     max,
-    config
+    config,
+    currentOffset
   });
 
   const handlePrevDay = () => {
-    setOffset(prev => prev + 1);
+    onOffsetChange(currentOffset + 1);
   };
 
   const handleNextDay = () => {
-    if (offset > 0) {
-      setOffset(prev => prev - 1);
+    if (currentOffset > 0) {
+      onOffsetChange(currentOffset - 1);
     }
   };
 
@@ -141,7 +140,7 @@ const ChartDisplay = ({ data, config }) => {
       <Title>{config.display || 'Sensor Data'}</Title>
       <StatsContainer>
         <StatItem>Min: {formatValue(min)}</StatItem>
-        <StatItem>{formatDate(offset)}</StatItem>
+        <StatItem>{formatDate(currentOffset)}</StatItem>
         <StatItem>Max: {formatValue(max)}</StatItem>
       </StatsContainer>
       <WeatherChart 
@@ -153,7 +152,9 @@ const ChartDisplay = ({ data, config }) => {
       />
       <NavigationContainer>
         <NavButton onClick={handlePrevDay}>← Previous Day</NavButton>
-        <NavButton onClick={handleNextDay} disabled={offset === 0}>Next Day →</NavButton>
+        <NavButton onClick={handleNextDay} disabled={currentOffset === 0}>
+          Next Day →
+        </NavButton>
       </NavigationContainer>
     </ChartContainer>
   );

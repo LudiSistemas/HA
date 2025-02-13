@@ -89,54 +89,54 @@ const componentRegistry = {
 
 const WeatherDisplay = ({ data, error }) => {
   const [historicalData, setHistoricalData] = useState({});
+  const [timeOffset, setTimeOffset] = useState(0);
   
   // Fetch historical data for a sensor
-  const fetchHistory = async (sensorId) => {
+  const fetchHistory = async (sensorId, offset = 0) => {
     try {
-      console.log(`Fetching history for ${sensorId}`);
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/sensors/${sensorId}/history`);
+      console.log(`Fetching history for ${sensorId} with offset ${offset}`);
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/sensors/${sensorId}/history?offset=${offset}`);
       if (!response.ok) throw new Error('Failed to fetch history');
       const history = await response.json();
-      console.log(`History data for ${sensorId}:`, history);
       return history;
     } catch (err) {
       console.error(`Error fetching history for ${sensorId}:`, err);
-      return [];
+      return null;
     }
   };
 
   // Fetch historical data for all configured sensors
+  const fetchAllHistory = async (offset = 0) => {
+    if (!data) return;
+
+    try {
+      const configString = import.meta.env.VITE_SENSOR_CONFIG;
+      const sensorConfig = JSON.parse(configString);
+      
+      const historyPromises = Object.keys(sensorConfig).map(async (sensorId) => {
+        const history = await fetchHistory(sensorId, offset);
+        return [sensorId, history];
+      });
+
+      const histories = await Promise.all(historyPromises);
+      const historyMap = Object.fromEntries(histories);
+      setHistoricalData(historyMap);
+    } catch (err) {
+      console.error('Error fetching historical data:', err);
+    }
+  };
+
+  // Initial fetch and setup refresh interval
   useEffect(() => {
-    const fetchAllHistory = async () => {
-      if (!data) {
-        console.log('No current data available, skipping history fetch');
-        return;
-      }
-
-      try {
-        const configString = import.meta.env.VITE_SENSOR_CONFIG;
-        const sensorConfig = JSON.parse(configString.replace('VITE_SENSOR_CONFIG=', ''));
-        console.log('Fetching history for sensors:', Object.keys(sensorConfig));
-        
-        const historyPromises = Object.keys(sensorConfig).map(async (sensorId) => {
-          const history = await fetchHistory(sensorId);
-          return [sensorId, history];
-        });
-
-        const histories = await Promise.all(historyPromises);
-        const historyMap = Object.fromEntries(histories);
-        console.log('All historical data:', historyMap);
-        setHistoricalData(historyMap);
-      } catch (err) {
-        console.error('Error fetching historical data:', err);
-      }
-    };
-
     console.log('Setting up history fetch');
-    fetchAllHistory();
-    const interval = setInterval(fetchAllHistory, 300000);
+    fetchAllHistory(timeOffset);
+    const interval = setInterval(() => fetchAllHistory(timeOffset), 300000);
     return () => clearInterval(interval);
-  }, [data]);
+  }, [data, timeOffset]);
+
+  const handleOffsetChange = (newOffset) => {
+    setTimeOffset(newOffset);
+  };
 
   // Parse sensor configuration
   let sensorConfig = {};
@@ -158,27 +158,23 @@ const WeatherDisplay = ({ data, error }) => {
   );
 
   // Render configured component for each sensor
-  const renderSensor = (sensor) => {
-    const config = sensorConfig[sensor.entity_id];
-    if (!config) return null;
-
+  const renderSensor = (sensor, config) => {
     const Component = componentRegistry[config.component];
     if (!Component) {
       console.error(`Component ${config.component} not found in registry`);
       return null;
     }
 
-    console.log(`Rendering ${config.component} for ${sensor.entity_id}`);
-    console.log('Historical data for sensor:', historicalData[sensor.entity_id]);
-
     return (
       <Component 
         key={sensor.entity_id}
         data={{
           ...sensor,
-          history: historicalData[sensor.entity_id] || []
+          history: historicalData[sensor.entity_id]
         }}
         config={config}
+        onOffsetChange={handleOffsetChange}
+        currentOffset={timeOffset}
       />
     );
   };
@@ -189,7 +185,7 @@ const WeatherDisplay = ({ data, error }) => {
 
   return (
     <Container>
-      {configuredSensors?.map(renderSensor)}
+      {configuredSensors?.map(sensor => renderSensor(sensor, sensorConfig[sensor.entity_id]))}
     </Container>
   );
 };
