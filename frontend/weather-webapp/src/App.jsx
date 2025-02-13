@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 import WeatherDisplay from './components/WeatherDisplay';
 import { LanguageProvider } from './contexts/LanguageContext';
-import ErrorBoundary from './components/ErrorBoundary';
+import ErrorBoundary from './components/displays/ErrorBoundary';
 
 const GlobalStyle = createGlobalStyle`
   * {
