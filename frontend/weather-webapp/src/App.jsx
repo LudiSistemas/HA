@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled, { createGlobalStyle } from 'styled-components';
 import WeatherDisplay from './components/WeatherDisplay';
 import { LanguageProvider } from './contexts/LanguageContext';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const GlobalStyle = createGlobalStyle`
   * {
@@ -92,10 +93,12 @@ function App() {
   }
 
   return (
-    <LanguageProvider>
-      <GlobalStyle />
-      <WeatherDisplay data={data} error={error} />
-    </LanguageProvider>
+    <ErrorBoundary>
+      <LanguageProvider>
+        <GlobalStyle />
+        <WeatherDisplay data={data} error={error} />
+      </LanguageProvider>
+    </ErrorBoundary>
   );
 }
 
