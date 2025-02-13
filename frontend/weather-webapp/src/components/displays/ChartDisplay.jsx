@@ -78,12 +78,30 @@ const NavButton = styled.button`
 const ChartDisplay = ({ data, config }) => {
   const [offset, setOffset] = useState(0);
 
-  if (!data || !data.history) {
+  // Early validation of required props
+  if (!data) {
+    console.log('No data provided to ChartDisplay');
     return null;
   }
 
+  if (!config) {
+    console.log('No config provided to ChartDisplay');
+    return null;
+  }
+
+  // Safely access history data with fallbacks
   const historyData = data.history || {};
-  const { min, max } = historyData;
+  const historyArray = historyData.history || [];
+  const min = historyData.min ?? null;
+  const max = historyData.max ?? null;
+
+  console.log('ChartDisplay data:', {
+    entityId: data.entity_id,
+    historyData,
+    min,
+    max,
+    config
+  });
 
   const handlePrevDay = () => {
     setOffset(prev => prev + 1);
@@ -105,16 +123,29 @@ const ChartDisplay = ({ data, config }) => {
     });
   };
 
+  // Safely format min/max values
+  const formatValue = (value) => {
+    if (value === null || value === undefined) return 'N/A';
+    const precision = config.precision || 1;
+    const unit = config.unit || '';
+    try {
+      return `${Number(value).toFixed(precision)}${unit}`;
+    } catch (error) {
+      console.error('Error formatting value:', error);
+      return 'N/A';
+    }
+  };
+
   return (
     <ChartContainer>
-      <Title>{config.display}</Title>
+      <Title>{config.display || 'Sensor Data'}</Title>
       <StatsContainer>
-        <StatItem>Min: {min !== null ? `${min.toFixed(config.precision || 1)}${config.unit || ''}` : 'N/A'}</StatItem>
+        <StatItem>Min: {formatValue(min)}</StatItem>
         <StatItem>{formatDate(offset)}</StatItem>
-        <StatItem>Max: {max !== null ? `${max.toFixed(config.precision || 1)}${config.unit || ''}` : 'N/A'}</StatItem>
+        <StatItem>Max: {formatValue(max)}</StatItem>
       </StatsContainer>
       <WeatherChart 
-        data={historyData.history || []}
+        data={historyArray}
         unit={data.attributes?.unit_of_measurement || ''}
         precision={config.precision || 1}
         sensorType={data.entity_id?.includes('rain') ? 'rain' : 'default'}
