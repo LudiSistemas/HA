@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
-import { sensorConfig } from '../config/sensors';
-import WeatherChart from './WeatherChart';
-import WindCompass from './WindCompass';
-import SiteStats from './SiteStats';
+import { componentRegistry } from './displays';
 import WeatherConditions from './WeatherConditions';
 
 const glow = keyframes`
@@ -86,17 +83,37 @@ const WarningMessage = styled.div`
 
 const WeatherDisplay = ({ data, error }) => {
   const [historicalData, setHistoricalData] = useState({});
+  
+  // Parse sensor configuration from environment
+  const sensorConfig = JSON.parse(import.meta.env.VITE_SENSOR_CONFIG);
 
-  const getSensorConfig = (entityId) => {
-    return sensorConfig[entityId] || {
-      name: entityId,
-      precision: 1,
-      icon: ''
-    };
-  };
+  // Filter and sort sensors based on configuration
+  const configuredSensors = data?.filter(sensor => 
+    sensorConfig[sensor.entity_id]
+  ).sort((a, b) => 
+    sensorConfig[a.entity_id].position - sensorConfig[b.entity_id].position
+  );
 
-  const formatValue = (value, precision) => {
-    return Number(value).toFixed(precision);
+  // Render configured component for each sensor
+  const renderSensor = (sensor) => {
+    const config = sensorConfig[sensor.entity_id];
+    const Component = componentRegistry[config.component];
+
+    if (!Component) {
+      console.error(`Component ${config.component} not found for sensor ${sensor.entity_id}`);
+      return null;
+    }
+
+    return (
+      <Component 
+        key={sensor.entity_id}
+        data={{
+          ...sensor,
+          history: historicalData[sensor.entity_id]
+        }}
+        config={config}
+      />
+    );
   };
 
   const fetchHistory = async (sensorId) => {
@@ -122,97 +139,12 @@ const WeatherDisplay = ({ data, error }) => {
     }
   }, [data]);
 
-  const renderValue = (sensor, config) => {
-    let value = sensor.state;
-    
-    // Special handling for pressure display
-    if (sensor.entity_id.includes('pressure')) {
-      const abs = sensor.attributes.absolute_pressure;
-      const rel = sensor.attributes.relative_pressure;
-      
-      return (
-        <>
-          <Value>
-            {formatValue(rel, config.precision)} {config.unit || sensor.attributes.unit_of_measurement}
-          </Value>
-          <div style={{ fontSize: '0.8em', color: '#888', marginTop: '5px' }}>
-            Apsolutni: {formatValue(abs, config.precision)} {config.unit || sensor.attributes.unit_of_measurement}
-          </div>
-        </>
-      );
-    }
-    
-    if (sensor.entity_id === 'sensor.ws2900_v2_02_03_wind_direction') {
-      const speedSensor = data.find(s => s.entity_id === 'sensor.ws2900_v2_02_03_wind_speed');
-      const gustSensor = data.find(s => s.entity_id === 'sensor.ws2900_v2_02_03_wind_gust');
-      return (
-        <WindCompass 
-          direction={sensor.state}
-          speed={speedSensor?.state}
-          gust={gustSensor?.state}
-        />
-      );
-    }
-
-    if (sensor.entity_id === 'sensor.ws2900_v2_02_03_uv_index') {
-      return (
-        <>
-          <Value>
-            {value}
-            {sensor.attributes.unit_of_measurement}
-          </Value>
-          <WarningMessage level={parseFloat(value) >= 6 ? 'high' : 'medium'}>
-            {config.getWarning(value)}
-          </WarningMessage>
-        </>
-      );
-    }
-
-    return (
-      <Value>
-        {value}
-        {config.unit || sensor.attributes.unit_of_measurement}
-      </Value>
-    );
-  };
-
-  if (error) {
-    return <ErrorMessage>{error}</ErrorMessage>;
-  }
+  if (error) return <ErrorMessage>{error}</ErrorMessage>;
 
   return (
     <Container>
-      {data && (
-        <WeatherCard style={{ order: -1 }}>
-          <WeatherConditions 
-            currentData={data}
-            pressureHistory={historicalData['sensor.ws2900_v2_02_03_relative_pressure']}
-          />
-        </WeatherCard>
-      )}
-      {data?.map((sensor) => {
-        const config = getSensorConfig(sensor.entity_id);
-        console.log('Historical data for sensor:', sensor.entity_id, historicalData[sensor.entity_id]);
-        return (
-          <WeatherCard key={sensor.entity_id}>
-            <Label>
-              {config.icon} {config.name || sensor.attributes.friendly_name}
-            </Label>
-            {renderValue(sensor, config)}
-            <WeatherChart 
-              data={historicalData[sensor.entity_id]}
-              unit={config.unit || sensor.attributes.unit_of_measurement}
-              precision={config.precision}
-              sensorType={sensor.entity_id.includes('rain') ? 'rain' : 'default'}
-              entityId={sensor.entity_id}
-            />
-            <LastUpdated>
-              Poslednji put ažurirano: {new Date(sensor.last_updated).toLocaleString()}
-            </LastUpdated>
-          </WeatherCard>
-        );
-      })}
-      <SiteStats />
+      <WeatherConditions currentData={data} pressureHistory={historicalData} />
+      {configuredSensors?.map(renderSensor)}
     </Container>
   );
 };
