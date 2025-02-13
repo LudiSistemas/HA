@@ -93,9 +93,11 @@ const WeatherDisplay = ({ data, error }) => {
   // Fetch historical data for a sensor
   const fetchHistory = async (sensorId) => {
     try {
+      console.log(`Fetching history for ${sensorId}`);
       const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/sensors/${sensorId}/history`);
       if (!response.ok) throw new Error('Failed to fetch history');
       const history = await response.json();
+      console.log(`History data for ${sensorId}:`, history);
       return history;
     } catch (err) {
       console.error(`Error fetching history for ${sensorId}:`, err);
@@ -106,11 +108,15 @@ const WeatherDisplay = ({ data, error }) => {
   // Fetch historical data for all configured sensors
   useEffect(() => {
     const fetchAllHistory = async () => {
-      if (!data) return;
+      if (!data) {
+        console.log('No current data available, skipping history fetch');
+        return;
+      }
 
       try {
         const configString = import.meta.env.VITE_SENSOR_CONFIG;
         const sensorConfig = JSON.parse(configString.replace('VITE_SENSOR_CONFIG=', ''));
+        console.log('Fetching history for sensors:', Object.keys(sensorConfig));
         
         const historyPromises = Object.keys(sensorConfig).map(async (sensorId) => {
           const history = await fetchHistory(sensorId);
@@ -119,14 +125,15 @@ const WeatherDisplay = ({ data, error }) => {
 
         const histories = await Promise.all(historyPromises);
         const historyMap = Object.fromEntries(histories);
+        console.log('All historical data:', historyMap);
         setHistoricalData(historyMap);
       } catch (err) {
         console.error('Error fetching historical data:', err);
       }
     };
 
+    console.log('Setting up history fetch');
     fetchAllHistory();
-    // Fetch historical data every 5 minutes
     const interval = setInterval(fetchAllHistory, 300000);
     return () => clearInterval(interval);
   }, [data]);
