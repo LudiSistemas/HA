@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import styled from 'styled-components';
 import WeatherChart from '../charts/WeatherChart';
 
@@ -27,43 +27,103 @@ const Title = styled.h3`
   font-family: 'Georgia', serif;
   color: white;
   font-size: 2.5rem;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
   font-weight: 500;
   text-align: center;
 
   @media (min-width: 1400px) {
     font-size: 3rem;
-    margin-bottom: 2.5rem;
+  }
+`;
+
+const StatsContainer = styled.div`
+  display: flex;
+  justify-content: space-between;
+  margin: 0.5rem 2rem 1.5rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-family: 'Courier New', monospace;
+`;
+
+const StatItem = styled.div`
+  text-align: center;
+`;
+
+const NavigationContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
+`;
+
+const NavButton = styled.button`
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: 'Courier New', monospace;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 `;
 
 const ChartDisplay = ({ data, config }) => {
-  console.log('ChartDisplay received data:', {
-    entity_id: data.entity_id,
-    state: data.state,
-    history: data.history,
-    config
-  });
-  
+  const [offset, setOffset] = useState(0);
+
   if (!data || !data.history) {
-    console.log('No data or history available for ChartDisplay');
     return null;
   }
 
-  // Extract the history array from the history object
-  const historyArray = data.history.history || [];
-  console.log('History array length:', historyArray.length);
+  const historyData = data.history || {};
+  const { min, max } = historyData;
+
+  const handlePrevDay = () => {
+    setOffset(prev => prev + 1);
+  };
+
+  const handleNextDay = () => {
+    if (offset > 0) {
+      setOffset(prev => prev - 1);
+    }
+  };
+
+  const formatDate = (offset) => {
+    const date = new Date();
+    date.setDate(date.getDate() - offset);
+    return date.toLocaleDateString('en-US', { 
+      month: 'long', 
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
 
   return (
     <ChartContainer>
       <Title>{config.display}</Title>
+      <StatsContainer>
+        <StatItem>Min: {min !== null ? `${min.toFixed(config.precision || 1)}${config.unit || ''}` : 'N/A'}</StatItem>
+        <StatItem>{formatDate(offset)}</StatItem>
+        <StatItem>Max: {max !== null ? `${max.toFixed(config.precision || 1)}${config.unit || ''}` : 'N/A'}</StatItem>
+      </StatsContainer>
       <WeatherChart 
-        data={historyArray}
+        data={historyData.history || []}
         unit={data.attributes?.unit_of_measurement || ''}
         precision={config.precision || 1}
         sensorType={data.entity_id?.includes('rain') ? 'rain' : 'default'}
         entityId={data.entity_id}
       />
+      <NavigationContainer>
+        <NavButton onClick={handlePrevDay}>← Previous Day</NavButton>
+        <NavButton onClick={handleNextDay} disabled={offset === 0}>Next Day →</NavButton>
+      </NavigationContainer>
     </ChartContainer>
   );
 };
