@@ -3,7 +3,10 @@ import styled from 'styled-components';
 import WeatherChart from '../charts/WeatherChart';
 
 const ChartContainer = styled.div`
-  // ... existing styles
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  margin: 1rem;
 `;
 
 const ChartDisplay = ({ data, config }) => {
