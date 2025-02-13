@@ -17,12 +17,13 @@ function App() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/current`);
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/sensors`);
         if (!response.ok) throw new Error('Network response was not ok');
         const result = await response.json();
         setData(result);
       } catch (err) {
         setError(err.message);
+        console.error('Error fetching data:', err);
       }
     };
 
