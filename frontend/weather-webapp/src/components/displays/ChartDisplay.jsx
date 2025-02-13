@@ -4,19 +4,22 @@ import WeatherChart from '../charts/WeatherChart';
 
 const ChartContainer = styled.div`
   padding: 2rem;
-  background: rgba(44, 46, 64, 0.7);
-  border-radius: 15px;
-  margin: 1rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(10px);
+  background: rgba(35, 38, 45, 0.5);
+  border-radius: 25px;
+  margin: 1rem auto;
+  max-width: 800px;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 `;
 
 const Title = styled.h3`
   font-family: 'Georgia', serif;
   color: white;
-  font-size: 1.75rem;
-  margin-bottom: 1.5rem;
-  font-weight: normal;
+  font-size: 2.5rem;
+  margin-bottom: 2rem;
+  font-weight: 500;
   text-align: center;
 `;
 

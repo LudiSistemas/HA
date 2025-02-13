@@ -23,12 +23,8 @@ ChartJS.register(
 
 const WeatherChart = ({ data, unit, precision = 1, sensorType = 'default' }) => {
   if (!data || !Array.isArray(data) || data.length === 0) {
-    console.log('No data provided to WeatherChart');
     return null;
   }
-
-  console.log('WeatherChart received data points:', data.length);
-  console.log('Sample data point:', data[0]); // Debug first data point
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
@@ -40,7 +36,6 @@ const WeatherChart = ({ data, unit, precision = 1, sensorType = 'default' }) => 
         hour12: false 
       });
     } catch (e) {
-      console.error('Error formatting timestamp:', timestamp, e);
       return '';
     }
   };
@@ -53,15 +48,15 @@ const WeatherChart = ({ data, unit, precision = 1, sensorType = 'default' }) => 
           label: unit,
           data: data.map(item => Number(parseFloat(item.state || 0).toFixed(precision))),
           fill: false,
-          borderColor: 'rgb(75, 192, 192)',
-          backgroundColor: 'rgba(75, 192, 192, 0.5)',
-          borderWidth: 2,
-          tension: 0.4,
+          borderColor: 'rgb(96, 245, 245)',
+          backgroundColor: 'rgba(96, 245, 245, 0.5)',
+          borderWidth: 1.5,
+          tension: 0.3,
           pointRadius: 0,
-          pointHoverRadius: 4,
-          pointHoverBackgroundColor: 'rgb(75, 192, 192)',
+          pointHoverRadius: 3,
+          pointHoverBackgroundColor: 'rgb(96, 245, 245)',
           pointHoverBorderColor: 'white',
-          pointHoverBorderWidth: 2,
+          pointHoverBorderWidth: 1,
         },
       ],
     };
@@ -76,45 +71,62 @@ const WeatherChart = ({ data, unit, precision = 1, sensorType = 'default' }) => 
         tooltip: {
           mode: 'index',
           intersect: false,
-          backgroundColor: 'rgba(44, 46, 64, 0.9)',
+          backgroundColor: 'rgba(35, 38, 45, 0.9)',
           titleColor: 'white',
           bodyColor: 'white',
           borderColor: 'rgba(255, 255, 255, 0.1)',
           borderWidth: 1,
-          padding: 10,
+          padding: 8,
           displayColors: false,
+          titleFont: {
+            size: 12
+          },
+          bodyFont: {
+            size: 12
+          }
         },
       },
       scales: {
         y: {
           beginAtZero: sensorType === 'rain',
           grid: {
-            color: 'rgba(255, 255, 255, 0.1)',
+            color: 'rgba(255, 255, 255, 0.05)',
             drawBorder: false,
+            lineWidth: 0.5
           },
           ticks: {
-            color: 'rgba(255, 255, 255, 0.8)',
+            color: 'rgba(255, 255, 255, 0.7)',
             font: {
-              size: 12,
+              size: 11,
+              family: "'Courier New', monospace"
             },
-            padding: 8,
+            padding: 10,
+            stepSize: 1
           },
+          border: {
+            display: false
+          }
         },
         x: {
           grid: {
-            color: 'rgba(255, 255, 255, 0.1)',
+            color: 'rgba(255, 255, 255, 0.05)',
             drawBorder: false,
+            lineWidth: 0.5
           },
           ticks: {
-            color: 'rgba(255, 255, 255, 0.8)',
+            color: 'rgba(255, 255, 255, 0.7)',
             maxRotation: 45,
             minRotation: 45,
             autoSkip: true,
             maxTicksLimit: 12,
             font: {
-              size: 11,
+              size: 10,
+              family: "'Courier New', monospace"
             },
-            padding: 8,
+            padding: 5
+          },
+          border: {
+            display: false
           }
         }
       },
@@ -125,22 +137,21 @@ const WeatherChart = ({ data, unit, precision = 1, sensorType = 'default' }) => 
       },
       layout: {
         padding: {
-          top: 10,
-          right: 10,
-          bottom: 10,
+          top: 20,
+          right: 20,
+          bottom: 20,
           left: 10
         }
       }
     };
 
     return (
-      <div style={{ height: '300px', width: '100%', marginTop: '1rem' }}>
+      <div style={{ height: '400px', width: '100%' }}>
         <Line data={chartData} options={options} />
       </div>
     );
   } catch (error) {
-    console.error('Error rendering WeatherChart:', error, data);
-    return <div>Error rendering chart</div>;
+    return null;
   }
 };
 
