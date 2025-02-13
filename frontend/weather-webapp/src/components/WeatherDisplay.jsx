@@ -16,13 +16,19 @@ const glow = keyframes`
 `;
 
 const Container = styled.div`
+  padding: 1rem;
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 20px;
+  gap: 1rem;
+  background: #1a1b26;
   min-height: 100vh;
-  background: #1a1a2e;
-  color: #fff;
+
+  @media (max-width: 768px) {
+    padding: 0.5rem;
+    gap: 0.5rem;
+  }
 `;
 
 const WeatherCard = styled.div`

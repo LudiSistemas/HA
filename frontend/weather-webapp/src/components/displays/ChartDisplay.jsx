@@ -13,6 +13,14 @@ const ChartContainer = styled.div`
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  box-sizing: border-box;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    margin: 0.5rem auto;
+    padding: 1rem;
+    border-radius: 15px;
+  }
 
   @media (min-width: 1400px) {
     max-width: 1400px;
@@ -31,8 +39,9 @@ const Title = styled.h3`
   font-weight: 500;
   text-align: center;
 
-  @media (min-width: 1400px) {
-    font-size: 3rem;
+  @media (max-width: 768px) {
+    font-size: 1.8rem;
+    margin-bottom: 0.5rem;
   }
 `;
 
@@ -42,6 +51,11 @@ const StatsContainer = styled.div`
   margin: 0.5rem 2rem 1.5rem;
   color: rgba(255, 255, 255, 0.8);
   font-family: 'Courier New', monospace;
+
+  @media (max-width: 768px) {
+    margin: 0.5rem 1rem 1rem;
+    font-size: 0.9rem;
+  }
 `;
 
 const StatItem = styled.div`
@@ -53,6 +67,11 @@ const NavigationContainer = styled.div`
   justify-content: center;
   gap: 1rem;
   margin-top: 1rem;
+
+  @media (max-width: 768px) {
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
 `;
 
 const NavButton = styled.button`
@@ -64,6 +83,11 @@ const NavButton = styled.button`
   cursor: pointer;
   font-family: 'Courier New', monospace;
   transition: all 0.2s;
+
+  @media (max-width: 768px) {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
+  }
 
   &:hover {
     background: rgba(255, 255, 255, 0.2);
