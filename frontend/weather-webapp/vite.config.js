@@ -16,5 +16,6 @@ export default defineConfig({
   // Make env variables available
   define: {
     __BACKEND_URL__: JSON.stringify(env.VITE_BACKEND_URL),
+    'process.env': {}
   }
 }) 
