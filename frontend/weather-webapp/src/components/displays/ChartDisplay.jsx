@@ -3,10 +3,21 @@ import styled from 'styled-components';
 import WeatherChart from '../charts/WeatherChart';
 
 const ChartContainer = styled.div`
-  padding: 1rem;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  padding: 2rem;
+  background: rgba(44, 46, 64, 0.7);
+  border-radius: 15px;
   margin: 1rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+`;
+
+const Title = styled.h3`
+  font-family: 'Georgia', serif;
+  color: white;
+  font-size: 1.75rem;
+  margin-bottom: 1.5rem;
+  font-weight: normal;
+  text-align: center;
 `;
 
 const ChartDisplay = ({ data, config }) => {
@@ -28,7 +39,7 @@ const ChartDisplay = ({ data, config }) => {
 
   return (
     <ChartContainer>
-      <h3>{config.display}</h3>
+      <Title>{config.display}</Title>
       <WeatherChart 
         data={historyArray}
         unit={data.attributes?.unit_of_measurement || ''}
