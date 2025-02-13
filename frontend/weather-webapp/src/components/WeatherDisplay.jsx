@@ -176,31 +176,20 @@ const WeatherDisplay = ({ data, error }) => {
       return null;
     }
 
-    // Check both data structures - direct and nested
-    const sensorData = data?.[sensorConfig.sensorId] || 
-                      data?.states?.[sensorConfig.sensorId] ||
-                      data?.entities?.[sensorConfig.sensorId];
-
-    console.log(`Checking data for ${sensorConfig.sensorId}:`, {
-      directAccess: data?.[sensorConfig.sensorId],
-      statesAccess: data?.states?.[sensorConfig.sensorId],
-      entitiesAccess: data?.entities?.[sensorConfig.sensorId],
-      finalData: sensorData
-    });
-
-    if (!sensorData) {
-      console.error(`No data found for sensor ${sensorConfig.sensorId}`);
-      return null;
-    }
+    // Directly use the sensor data from the data prop
+    const sensorData = data[sensorConfig.sensorId];
+    
+    // Combine current sensor data with historical data
+    const combinedData = {
+      ...sensorData,
+      entity_id: sensorConfig.sensorId,
+      history: historicalData[sensorConfig.sensorId]
+    };
 
     return (
       <Component 
         key={sensorConfig.sensorId}
-        data={{
-          ...sensorData,
-          entity_id: sensorConfig.sensorId,
-          history: historicalData[sensorConfig.sensorId]
-        }}
+        data={combinedData}
         config={sensorConfig}
         onOffsetChange={handleOffsetChange}
         currentOffset={timeOffset}
