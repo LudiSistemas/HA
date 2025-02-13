@@ -22,23 +22,12 @@ ChartJS.register(
 );
 
 const WeatherChart = ({ data, unit, precision = 1, sensorType = 'default' }) => {
-  // Add data validation
-  if (!data) {
+  if (!data || !Array.isArray(data) || data.length === 0) {
     console.log('No data provided to WeatherChart');
     return null;
   }
 
-  if (!Array.isArray(data)) {
-    console.log('Data provided to WeatherChart is not an array:', data);
-    return null;
-  }
-
-  if (data.length === 0) {
-    console.log('Empty data array provided to WeatherChart');
-    return null;
-  }
-
-  console.log('WeatherChart received data:', data);
+  console.log('WeatherChart received data points:', data.length);
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
@@ -57,11 +46,11 @@ const WeatherChart = ({ data, unit, precision = 1, sensorType = 'default' }) => 
 
   try {
     const chartData = {
-      labels: data.map(item => formatTime(item.last_updated)),
+      labels: data.map(item => formatTime(item.time)),
       datasets: [
         {
           label: `${unit || ''}`,
-          data: data.map(item => Number(parseFloat(item.state || 0).toFixed(precision))),
+          data: data.map(item => Number(parseFloat(item.value || 0).toFixed(precision))),
           fill: false,
           borderColor: 'rgb(75, 192, 192)',
           tension: 0.1,

@@ -22,18 +22,15 @@ const ChartDisplay = ({ data, config }) => {
     return null;
   }
 
-  if (!Array.isArray(data.history)) {
-    console.log('History is not an array:', data.history);
-    return null;
-  }
-
-  console.log('Rendering chart with history length:', data.history.length);
+  // Extract the history array from the history object
+  const historyArray = data.history.history || [];
+  console.log('History array length:', historyArray.length);
 
   return (
     <ChartContainer>
       <h3>{config.display}</h3>
       <WeatherChart 
-        data={data.history}
+        data={historyArray}
         unit={data.attributes?.unit_of_measurement || ''}
         precision={config.precision || 1}
         sensorType={data.entity_id?.includes('rain') ? 'rain' : 'default'}
