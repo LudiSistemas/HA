@@ -28,6 +28,7 @@ const WeatherChart = ({ data, unit, precision = 1, sensorType = 'default' }) => 
   }
 
   console.log('WeatherChart received data points:', data.length);
+  console.log('Sample data point:', data[0]); // Debug first data point
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
@@ -46,11 +47,11 @@ const WeatherChart = ({ data, unit, precision = 1, sensorType = 'default' }) => 
 
   try {
     const chartData = {
-      labels: data.map(item => formatTime(item.time)),
+      labels: data.map(item => formatTime(item.last_updated)),
       datasets: [
         {
-          label: `${unit || ''}`,
-          data: data.map(item => Number(parseFloat(item.value || 0).toFixed(precision))),
+          label: unit,
+          data: data.map(item => Number(parseFloat(item.state || 0).toFixed(precision))),
           fill: false,
           borderColor: 'rgb(75, 192, 192)',
           tension: 0.1,
@@ -65,6 +66,10 @@ const WeatherChart = ({ data, unit, precision = 1, sensorType = 'default' }) => 
       plugins: {
         legend: {
           display: false,
+        },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
         },
       },
       scales: {
@@ -84,9 +89,16 @@ const WeatherChart = ({ data, unit, precision = 1, sensorType = 'default' }) => 
           ticks: {
             color: 'rgba(255, 255, 255, 0.8)',
             maxRotation: 45,
-            minRotation: 45
+            minRotation: 45,
+            autoSkip: true,
+            maxTicksLimit: 12 // Show fewer x-axis labels
           }
         }
+      },
+      interaction: {
+        mode: 'nearest',
+        axis: 'x',
+        intersect: false
       }
     };
 
@@ -96,7 +108,7 @@ const WeatherChart = ({ data, unit, precision = 1, sensorType = 'default' }) => 
       </div>
     );
   } catch (error) {
-    console.error('Error rendering WeatherChart:', error);
+    console.error('Error rendering WeatherChart:', error, data);
     return <div>Error rendering chart</div>;
   }
 };
