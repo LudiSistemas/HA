@@ -81,16 +81,37 @@ const WarningMessage = styled.div`
   text-align: center;
 `;
 
-// Define component registry explicitly
 const componentRegistry = {
   ChartDisplay,
-  WindCompass,
+  WindCompass
 };
 
 const WeatherDisplay = ({ data, error }) => {
   const [historicalData, setHistoricalData] = useState({});
   const [timeOffset, setTimeOffset] = useState(0);
-  
+  const [configuredSensors, setConfiguredSensors] = useState([]);
+
+  // Parse sensor configuration
+  useEffect(() => {
+    try {
+      const configString = import.meta.env.VITE_SENSOR_CONFIG;
+      const sensorConfig = JSON.parse(configString);
+      
+      // Create array of configured sensors with their config
+      const sensors = Object.entries(sensorConfig)
+        .map(([sensorId, config]) => ({
+          sensorId,
+          ...config
+        }))
+        .sort((a, b) => a.position - b.position);
+
+      console.log('Configured sensors:', sensors);
+      setConfiguredSensors(sensors);
+    } catch (err) {
+      console.error('Error parsing sensor config:', err);
+    }
+  }, []);
+
   // Fetch historical data for a sensor
   const fetchHistory = async (sensorId, offset = 0) => {
     try {
@@ -98,6 +119,7 @@ const WeatherDisplay = ({ data, error }) => {
       const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/sensors/${sensorId}/history?offset=${offset}`);
       if (!response.ok) throw new Error('Failed to fetch history');
       const history = await response.json();
+      console.log(`Received history for ${sensorId}:`, history);
       return history;
     } catch (err) {
       console.error(`Error fetching history for ${sensorId}:`, err);
@@ -110,82 +132,67 @@ const WeatherDisplay = ({ data, error }) => {
     if (!data) return;
 
     try {
-      const configString = import.meta.env.VITE_SENSOR_CONFIG;
-      const sensorConfig = JSON.parse(configString);
-      
-      const historyPromises = Object.keys(sensorConfig).map(async (sensorId) => {
-        const history = await fetchHistory(sensorId, offset);
-        return [sensorId, history];
+      const historyPromises = configuredSensors.map(async (sensor) => {
+        const history = await fetchHistory(sensor.sensorId, offset);
+        return [sensor.sensorId, history];
       });
 
       const histories = await Promise.all(historyPromises);
       const historyMap = Object.fromEntries(histories);
+      console.log('All historical data:', historyMap);
       setHistoricalData(historyMap);
     } catch (err) {
       console.error('Error fetching historical data:', err);
     }
   };
 
-  // Initial fetch and setup refresh interval
   useEffect(() => {
     console.log('Setting up history fetch');
     fetchAllHistory(timeOffset);
     const interval = setInterval(() => fetchAllHistory(timeOffset), 300000);
     return () => clearInterval(interval);
-  }, [data, timeOffset]);
+  }, [configuredSensors, timeOffset]);
 
   const handleOffsetChange = (newOffset) => {
     setTimeOffset(newOffset);
-  };
-
-  // Parse sensor configuration
-  let sensorConfig = {};
-  try {
-    const configString = import.meta.env.VITE_SENSOR_CONFIG;
-    if (configString) {
-      const cleanConfigString = configString.replace('VITE_SENSOR_CONFIG=', '');
-      sensorConfig = JSON.parse(cleanConfigString);
-    }
-  } catch (e) {
-    console.error('Failed to parse VITE_SENSOR_CONFIG:', e);
-  }
-
-  // Filter and sort sensors based on configuration
-  const configuredSensors = data?.filter(sensor => 
-    sensorConfig[sensor.entity_id]
-  ).sort((a, b) => 
-    (sensorConfig[a.entity_id]?.position || 0) - (sensorConfig[b.entity_id]?.position || 0)
-  );
-
-  // Render configured component for each sensor
-  const renderSensor = (sensor, config) => {
-    const Component = componentRegistry[config.component];
-    if (!Component) {
-      console.error(`Component ${config.component} not found in registry`);
-      return null;
-    }
-
-    return (
-      <Component 
-        key={sensor.entity_id}
-        data={{
-          ...sensor,
-          history: historicalData[sensor.entity_id]
-        }}
-        config={config}
-        onOffsetChange={handleOffsetChange}
-        currentOffset={timeOffset}
-      />
-    );
   };
 
   if (error) {
     return <ErrorMessage>{error}</ErrorMessage>;
   }
 
+  const renderSensor = (sensorConfig) => {
+    const Component = componentRegistry[sensorConfig.component];
+    if (!Component) {
+      console.error(`Component ${sensorConfig.component} not found in registry`);
+      return null;
+    }
+
+    const sensorData = data?.[sensorConfig.sensorId];
+    if (!sensorData) {
+      console.error(`No data found for sensor ${sensorConfig.sensorId}`);
+      return null;
+    }
+
+    console.log(`Rendering ${sensorConfig.component} for ${sensorConfig.sensorId}`);
+
+    return (
+      <Component 
+        key={sensorConfig.sensorId}
+        data={{
+          ...sensorData,
+          history: historicalData[sensorConfig.sensorId]
+        }}
+        config={sensorConfig}
+        onOffsetChange={handleOffsetChange}
+        currentOffset={timeOffset}
+      />
+    );
+  };
+
   return (
     <Container>
-      {configuredSensors?.map(sensor => renderSensor(sensor, sensorConfig[sensor.entity_id]))}
+      {configuredSensors.map(renderSensor)}
     </Container>
   );
 };
