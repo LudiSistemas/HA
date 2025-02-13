@@ -1,10 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import styled from 'styled-components';
+import styled, { createGlobalStyle } from 'styled-components';
 import WeatherDisplay from './components/WeatherDisplay';
 import ErrorBoundary from './components/ErrorBoundary';
 
+const GlobalStyle = createGlobalStyle`
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body, html {
+    background: #1a1b26;
+    min-height: 100vh;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  }
+
+  #root {
+    background: #1a1b26;
+    min-height: 100vh;
+    width: 100%;
+  }
+`;
+
 const AppContainer = styled.div`
   min-height: 100vh;
+  width: 100%;
   background: #1a1b26;
   color: white;
   padding: 20px;
@@ -47,11 +71,14 @@ const App = () => {
   }, []);
 
   return (
-    <AppContainer>
-      <ErrorBoundary>
-        <WeatherDisplay data={sensorData} error={error} />
-      </ErrorBoundary>
-    </AppContainer>
+    <>
+      <GlobalStyle />
+      <AppContainer>
+        <ErrorBoundary>
+          <WeatherDisplay data={sensorData} error={error} />
+        </ErrorBoundary>
+      </AppContainer>
+    </>
   );
 };
 
