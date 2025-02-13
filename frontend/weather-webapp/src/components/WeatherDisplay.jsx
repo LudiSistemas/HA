@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
-import { componentRegistry } from './displays';
-import WeatherConditions from './WeatherConditions';
+import ChartDisplay from './displays/ChartDisplay';
+import WindCompass from './displays/WindCompass';
 
 const glow = keyframes`
   0% {
@@ -81,6 +81,12 @@ const WarningMessage = styled.div`
   text-align: center;
 `;
 
+// Define component registry explicitly
+const componentRegistry = {
+  ChartDisplay,
+  WindCompass,
+};
+
 const WeatherDisplay = ({ data, error }) => {
   const [historicalData, setHistoricalData] = useState({});
   
@@ -89,7 +95,6 @@ const WeatherDisplay = ({ data, error }) => {
   try {
     const configString = import.meta.env.VITE_SENSOR_CONFIG;
     if (configString) {
-      // Remove 'VITE_SENSOR_CONFIG=' if it exists in the string
       const cleanConfigString = configString.replace('VITE_SENSOR_CONFIG=', '');
       sensorConfig = JSON.parse(cleanConfigString);
     }
@@ -98,8 +103,8 @@ const WeatherDisplay = ({ data, error }) => {
     console.log('Raw config:', import.meta.env.VITE_SENSOR_CONFIG);
   }
 
-  // Add debug logs
-  console.log('Environment variables:', import.meta.env);
+  // Debug logs
+  console.log('Available components:', Object.keys(componentRegistry));
   console.log('Parsed sensor config:', sensorConfig);
   console.log('Raw data:', data);
   console.log('Historical data:', historicalData);
@@ -116,13 +121,19 @@ const WeatherDisplay = ({ data, error }) => {
   // Render configured component for each sensor
   const renderSensor = (sensor) => {
     const config = sensorConfig[sensor.entity_id];
-    if (!config) return null;
+    if (!config) {
+      console.log(`No config found for sensor ${sensor.entity_id}`);
+      return null;
+    }
 
     const Component = componentRegistry[config.component];
     if (!Component) {
-      console.error(`Component ${config.component} not found for sensor ${sensor.entity_id}`);
+      console.error(`Component ${config.component} not found in registry`);
+      console.log('Available components:', Object.keys(componentRegistry));
       return null;
     }
+
+    console.log(`Rendering ${config.component} for ${sensor.entity_id}`);
 
     return (
       <Component 
@@ -163,7 +174,6 @@ const WeatherDisplay = ({ data, error }) => {
 
   return (
     <Container>
-      <WeatherConditions currentData={data} pressureHistory={historicalData} />
       {configuredSensors?.map(renderSensor)}
     </Container>
   );
