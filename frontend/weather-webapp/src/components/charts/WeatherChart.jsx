@@ -40,6 +40,14 @@ const WeatherChart = ({ data, unit, precision = 1, sensorType = 'default' }) => 
     }
   };
 
+  // Calculate responsive tick count based on screen width
+  const getMaxTicksLimit = () => {
+    const width = window.innerWidth;
+    if (width >= 1800) return 24;
+    if (width >= 1400) return 18;
+    return 12;
+  };
+
   try {
     const chartData = {
       labels: data.map(item => formatTime(item.last_updated)),
@@ -118,7 +126,7 @@ const WeatherChart = ({ data, unit, precision = 1, sensorType = 'default' }) => 
             maxRotation: 45,
             minRotation: 45,
             autoSkip: true,
-            maxTicksLimit: 12,
+            maxTicksLimit: getMaxTicksLimit(),
             font: {
               size: 10,
               family: "'Courier New', monospace"
@@ -138,15 +146,18 @@ const WeatherChart = ({ data, unit, precision = 1, sensorType = 'default' }) => 
       layout: {
         padding: {
           top: 20,
-          right: 20,
+          right: 25,
           bottom: 20,
-          left: 10
+          left: 15
         }
       }
     };
 
     return (
-      <div style={{ height: '400px', width: '100%' }}>
+      <div style={{ 
+        height: window.innerWidth >= 1400 ? '500px' : '400px', 
+        width: '100%' 
+      }}>
         <Line data={chartData} options={options} />
       </div>
     );
