@@ -84,21 +84,39 @@ const WarningMessage = styled.div`
 const WeatherDisplay = ({ data, error }) => {
   const [historicalData, setHistoricalData] = useState({});
   
-  // Parse sensor configuration from environment
-  const sensorConfig = JSON.parse(import.meta.env.VITE_SENSOR_CONFIG);
+  // Safely parse the sensor config
+  let sensorConfig = {};
+  try {
+    const configString = import.meta.env.VITE_SENSOR_CONFIG;
+    if (configString) {
+      sensorConfig = JSON.parse(configString);
+    }
+  } catch (e) {
+    console.error('Failed to parse VITE_SENSOR_CONFIG:', e);
+    console.log('Raw config:', import.meta.env.VITE_SENSOR_CONFIG);
+  }
+
+  // Add debug logs
+  console.log('Environment variables:', import.meta.env);
+  console.log('Parsed sensor config:', sensorConfig);
+  console.log('Raw data:', data);
+  console.log('Historical data:', historicalData);
 
   // Filter and sort sensors based on configuration
   const configuredSensors = data?.filter(sensor => 
     sensorConfig[sensor.entity_id]
   ).sort((a, b) => 
-    sensorConfig[a.entity_id].position - sensorConfig[b.entity_id].position
+    (sensorConfig[a.entity_id]?.position || 0) - (sensorConfig[b.entity_id]?.position || 0)
   );
+
+  console.log('Configured sensors:', configuredSensors);
 
   // Render configured component for each sensor
   const renderSensor = (sensor) => {
     const config = sensorConfig[sensor.entity_id];
-    const Component = componentRegistry[config.component];
+    if (!config) return null;
 
+    const Component = componentRegistry[config.component];
     if (!Component) {
       console.error(`Component ${config.component} not found for sensor ${sensor.entity_id}`);
       return null;
