@@ -318,11 +318,9 @@ async def get_power_stats(days: int = 30):
         min_acceptable = 207  # 230 - 10%
         max_acceptable = 253  # 230 + 10%
         
-        # Define realistic voltage range for filtering out bad readings
-        # Realistically, grid voltage shouldn't drop below 180V or exceed 260V
-        # even during severe conditions
-        REALISTIC_MIN_VOLTAGE = 100
-        REALISTIC_MAX_VOLTAGE = 270
+        # Define threshold for obvious measurement errors
+        # Only filter out values that are clearly errors (below 100V)
+        ERROR_THRESHOLD = 100
         
         # Calculate statistics for each phase
         stats = {}
@@ -340,17 +338,15 @@ async def get_power_stats(days: int = 30):
             voltage_values = []
             timestamps = []
             
-            # First pass: collect all valid voltage values
+            # First pass: collect all valid voltage values, filtering only obvious errors
             for reading in data:
                 try:
                     voltage_str = reading["state"]
                     voltage = float(voltage_str)
                     
-                    # Filter out unrealistic voltage values
-                    if (isnan(voltage) or 
-                        voltage < REALISTIC_MIN_VOLTAGE or 
-                        voltage > REALISTIC_MAX_VOLTAGE):
-                        logger.warning(f"Unrealistic voltage value for {sensor_id}: {voltage} (from '{voltage_str}')")
+                    # Filter out only obvious measurement errors
+                    if isnan(voltage) or voltage < ERROR_THRESHOLD:
+                        logger.warning(f"Filtering obvious error for {sensor_id}: {voltage}V (from '{voltage_str}')")
                         continue
                         
                     voltage_values.append(voltage)

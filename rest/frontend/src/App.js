@@ -52,20 +52,18 @@ function App() {
         throw new Error('No data received from the server');
       }
       
-      // Define realistic voltage range
-      const REALISTIC_MIN_VOLTAGE = 100;
-      const REALISTIC_MAX_VOLTAGE = 280;
+      // Define threshold for obvious measurement errors
+      const ERROR_THRESHOLD = 100;
       
-      // Process the data to filter out invalid values
+      // Process the data to filter out only obvious errors
       const processedData = {};
       Object.entries(response.data).forEach(([sensorId, data]) => {
         // Filter out invalid voltage values from voltage_data
         if (data.voltage_data && Array.isArray(data.voltage_data)) {
           const filteredVoltageData = data.voltage_data.filter(item => {
             const voltage = parseFloat(item[1]);
-            return !isNaN(voltage) && 
-                   voltage >= REALISTIC_MIN_VOLTAGE && 
-                   voltage <= REALISTIC_MAX_VOLTAGE;
+            // Filter out only obvious errors (below 100V)
+            return !isNaN(voltage) && voltage >= ERROR_THRESHOLD;
           });
           
           // Recalculate min, max, avg based on filtered data
@@ -199,9 +197,8 @@ function App() {
   const getLineChartData = (phaseData) => {
     if (!phaseData || !phaseData.voltage_data || phaseData.voltage_data.length === 0) return null;
 
-    // Define realistic voltage range
-    const REALISTIC_MIN_VOLTAGE = 180;
-    const REALISTIC_MAX_VOLTAGE = 260;
+    // Define threshold for obvious measurement errors
+    const ERROR_THRESHOLD = 100;
 
     // Sort data by timestamp
     const sortedData = [...phaseData.voltage_data].sort((a, b) => new Date(a[0]) - new Date(b[0]));
@@ -250,10 +247,8 @@ function App() {
     const voltageData = dataPoints.map(item => {
       try {
         const voltage = parseFloat(item[1]);
-        // Filter out invalid voltage values using realistic range
-        return isNaN(voltage) || 
-               voltage < REALISTIC_MIN_VOLTAGE || 
-               voltage > REALISTIC_MAX_VOLTAGE ? null : voltage;
+        // Filter out only obvious errors (below 100V)
+        return isNaN(voltage) || voltage < ERROR_THRESHOLD ? null : voltage;
       } catch (e) {
         console.error('Error parsing voltage:', e, item[1]);
         return null;
