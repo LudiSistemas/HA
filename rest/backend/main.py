@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -10,6 +10,17 @@ import time
 import os
 import logging
 from pathlib import Path
+import json
+import requests
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
+from pydantic import BaseModel
+from typing import Dict, List, Optional, Any
+import asyncio
+import aiohttp
+
+# Load environment variables
+load_dotenv()
 
 # Create data directory if it doesn't exist
 data_dir = Path(__file__).parent / 'data'
@@ -44,6 +55,30 @@ app.add_middleware(
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Environment variables
+HASS_URL = os.getenv("HASS_URL")
+HASS_TOKEN = os.getenv("HASS_TOKEN")
+SENSOR_IDS = os.getenv("SENSOR_IDS", "").split(",")
+POWER_SENSOR_IDS = os.getenv("POWER_SENSOR_IDS", "").split(",")
+STATION_ALTITUDE = float(os.getenv("STATION_ALTITUDE", 230))  # Default to Niš altitude
+
+# Cache for sensor data
+sensor_cache = {}
+power_sensor_cache = {}
+power_history_cache = {}
+last_cache_update = 0
+last_power_cache_update = 0
+last_power_history_update = 0
+CACHE_DURATION = 300  # 5 minutes in seconds
+POWER_CACHE_DURATION = 60  # 1 minute in seconds
+POWER_HISTORY_CACHE_DURATION = 3600  # 1 hour in seconds
+
+# Headers for Home Assistant API
+headers = {
+    "Authorization": f"Bearer {HASS_TOKEN}",
+    "Content-Type": "application/json",
+}
+
 # Request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -77,6 +112,194 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 app.include_router(router)
+
+async def fetch_power_sensor_data():
+    """Fetch current power sensor data from Home Assistant"""
+    global power_sensor_cache, last_power_cache_update
+    
+    current_time = time.time()
+    if current_time - last_power_cache_update < POWER_CACHE_DURATION and power_sensor_cache:
+        return power_sensor_cache
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for sensor_id in POWER_SENSOR_IDS:
+                if not sensor_id:
+                    continue
+                url = f"{HASS_URL}/api/states/{sensor_id}"
+                tasks.append(session.get(url, headers=headers))
+            
+            responses = await asyncio.gather(*tasks)
+            
+            power_data = {}
+            for i, response in enumerate(responses):
+                if response.status == 200:
+                    data = await response.json()
+                    sensor_id = POWER_SENSOR_IDS[i]
+                    power_data[sensor_id] = {
+                        "state": data.get("state"),
+                        "last_updated": data.get("last_updated"),
+                        "attributes": data.get("attributes", {})
+                    }
+                else:
+                    logger.error(f"Failed to fetch data for sensor {POWER_SENSOR_IDS[i]}: {response.status}")
+            
+            if power_data:
+                power_sensor_cache = power_data
+                last_power_cache_update = current_time
+                return power_data
+            else:
+                logger.error("No power sensor data retrieved")
+                return power_sensor_cache if power_sensor_cache else {}
+    
+    except Exception as e:
+        logger.error(f"Error fetching power sensor data: {e}")
+        return power_sensor_cache if power_sensor_cache else {}
+
+async def fetch_power_history(start_time=None, end_time=None):
+    """Fetch historical power sensor data from Home Assistant"""
+    global power_history_cache, last_power_history_update
+    
+    current_time = time.time()
+    if current_time - last_power_history_update < POWER_HISTORY_CACHE_DURATION and power_history_cache:
+        return power_history_cache
+    
+    if not start_time:
+        # Default to last 24 hours
+        start_time = (datetime.now() - timedelta(days=1)).isoformat()
+    
+    if not end_time:
+        end_time = datetime.now().isoformat()
+    
+    try:
+        url = f"{HASS_URL}/api/history/period/{start_time}"
+        params = {
+            "filter_entity_id": ",".join(POWER_SENSOR_IDS),
+            "end_time": end_time,
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, params=params) as response:
+                if response.status == 200:
+                    history_data = await response.json()
+                    
+                    # Process and organize the data
+                    processed_data = {}
+                    for entity_data in history_data:
+                        if not entity_data:
+                            continue
+                        
+                        entity_id = entity_data[0]["entity_id"]
+                        processed_data[entity_id] = [
+                            {
+                                "state": item["state"],
+                                "timestamp": item["last_updated"],
+                                "attributes": item.get("attributes", {})
+                            }
+                            for item in entity_data
+                        ]
+                    
+                    power_history_cache = processed_data
+                    last_power_history_update = current_time
+                    return processed_data
+                else:
+                    logger.error(f"Failed to fetch history data: {response.status}")
+                    return power_history_cache if power_history_cache else {}
+    
+    except Exception as e:
+        logger.error(f"Error fetching power history data: {e}")
+        return power_history_cache if power_history_cache else {}
+
+@app.get("/api/power/current")
+async def get_power_data():
+    """Get current power sensor data"""
+    power_data = await fetch_power_sensor_data()
+    if not power_data:
+        raise HTTPException(status_code=503, detail="Failed to retrieve power sensor data")
+    return power_data
+
+@app.get("/api/power/history")
+async def get_power_history(start_time: Optional[str] = None, end_time: Optional[str] = None):
+    """Get historical power sensor data"""
+    history_data = await fetch_power_history(start_time, end_time)
+    if not history_data:
+        raise HTTPException(status_code=503, detail="Failed to retrieve power history data")
+    return history_data
+
+@app.get("/api/power/stats")
+async def get_power_stats(days: int = 30):
+    """Get power statistics for voltage quality analysis"""
+    try:
+        # Calculate the start time based on the requested days
+        start_time = (datetime.now() - timedelta(days=days)).isoformat()
+        
+        # Fetch the historical data
+        history_data = await fetch_power_history(start_time)
+        
+        if not history_data:
+            raise HTTPException(status_code=503, detail="Failed to retrieve power history data")
+        
+        # Define the acceptable voltage range (230V ±10%)
+        min_voltage = 207  # 230 - 10%
+        max_voltage = 253  # 230 + 10%
+        
+        # Calculate statistics for each phase
+        stats = {}
+        for sensor_id, data in history_data.items():
+            if not data:
+                continue
+                
+            # Count readings within and outside the acceptable range
+            total_readings = len(data)
+            in_range_count = 0
+            below_range_count = 0
+            above_range_count = 0
+            
+            voltage_values = []
+            timestamps = []
+            
+            for reading in data:
+                try:
+                    voltage = float(reading["state"])
+                    voltage_values.append(voltage)
+                    timestamps.append(reading["timestamp"])
+                    
+                    if min_voltage <= voltage <= max_voltage:
+                        in_range_count += 1
+                    elif voltage < min_voltage:
+                        below_range_count += 1
+                    else:
+                        above_range_count += 1
+                except (ValueError, TypeError):
+                    # Skip invalid readings
+                    continue
+            
+            if total_readings > 0:
+                stats[sensor_id] = {
+                    "total_readings": total_readings,
+                    "in_range_count": in_range_count,
+                    "below_range_count": below_range_count,
+                    "above_range_count": above_range_count,
+                    "in_range_percentage": (in_range_count / total_readings) * 100 if total_readings > 0 else 0,
+                    "below_range_percentage": (below_range_count / total_readings) * 100 if total_readings > 0 else 0,
+                    "above_range_percentage": (above_range_count / total_readings) * 100 if total_readings > 0 else 0,
+                    "min_voltage": min(voltage_values) if voltage_values else None,
+                    "max_voltage": max(voltage_values) if voltage_values else None,
+                    "avg_voltage": sum(voltage_values) / len(voltage_values) if voltage_values else None,
+                    "voltage_data": list(zip(timestamps, voltage_values)),
+                    "acceptable_range": {
+                        "min": min_voltage,
+                        "max": max_voltage,
+                        "nominal": 230
+                    }
+                }
+        
+        return stats
+    
+    except Exception as e:
+        logger.error(f"Error calculating power statistics: {e}")
+        raise HTTPException(status_code=500, detail=f"Error calculating power statistics: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
