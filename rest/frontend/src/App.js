@@ -22,6 +22,7 @@ function App() {
   const [error, setError] = useState(null);
   const [timeRange, setTimeRange] = useState(DEFAULT_TIME_RANGE);
   const [chartKey, setChartKey] = useState(Date.now()); // Add a key to force chart re-render
+  const [retryCount, setRetryCount] = useState(0);
 
   // Map sensor IDs to Serbian phase names
   const phaseNames = {
@@ -45,15 +46,40 @@ function App() {
       console.log(`Fetching power stats for ${timeRange} days...`);
       const response = await api.get(`/api/power/stats?days=${timeRange}`);
       console.log('Received power stats:', response.data);
+      
+      // Check if we have valid data
+      if (!response.data || Object.keys(response.data).length === 0) {
+        throw new Error('No data received from the server');
+      }
+      
       setPowerStats(response.data);
       
       // Force chart re-render by updating the key
       setChartKey(Date.now());
       
       setError(null);
+      setRetryCount(0); // Reset retry count on success
     } catch (err) {
       console.error('Error fetching power stats:', err);
-      setError('Greška pri učitavanju podataka. Molimo pokušajte ponovo kasnije.');
+      
+      // Get a user-friendly error message
+      let errorMessage = 'Greška pri učitavanju podataka. Molimo pokušajte ponovo kasnije.';
+      if (err.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        errorMessage = `Greška servera: ${err.response.status} - ${err.response.data?.detail || 'Nepoznata greška'}`;
+      } else if (err.request) {
+        // The request was made but no response was received
+        errorMessage = 'Nije moguće povezati se sa serverom. Proverite internet konekciju.';
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        errorMessage = `Greška: ${err.message}`;
+      }
+      
+      setError(errorMessage);
+      
+      // Increment retry count
+      setRetryCount(prev => prev + 1);
     } finally {
       setLoading(false);
     }
@@ -70,11 +96,30 @@ function App() {
     return () => clearInterval(intervalId);
   }, [timeRange]); // This dependency array ensures the effect runs when timeRange changes
 
+  // Effect to retry on error, with exponential backoff
+  useEffect(() => {
+    if (error && retryCount < 5) {
+      const backoffTime = Math.min(1000 * Math.pow(2, retryCount), 30000); // Max 30 seconds
+      console.log(`Retrying in ${backoffTime/1000} seconds (attempt ${retryCount + 1}/5)...`);
+      
+      const retryTimer = setTimeout(() => {
+        fetchPowerStats();
+      }, backoffTime);
+      
+      return () => clearTimeout(retryTimer);
+    }
+  }, [error, retryCount]);
+
   // Handle time range change
   const handleTimeRangeChange = (days) => {
     console.log(`Changing time range to ${days} days`);
     setTimeRange(days);
     // No need to call fetchPowerStats() here as the useEffect will trigger due to timeRange change
+  };
+
+  // Handle manual refresh
+  const handleManualRefresh = () => {
+    fetchPowerStats();
   };
 
   // Prepare pie chart data for a phase
@@ -136,20 +181,32 @@ function App() {
 
     // Format the dates for display
     const labels = dataPoints.map(item => {
-      const date = new Date(item[0]);
-      if (timeRange <= 1) {
-        // For 1 day, show hours and minutes
-        return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-      } else if (timeRange <= 7) {
-        // For 1-7 days, show day and hour
-        return `${date.getDate()}.${date.getMonth() + 1} ${date.getHours()}h`;
-      } else {
-        // For longer periods, show date only
-        return `${date.getDate()}.${date.getMonth() + 1}`;
+      try {
+        const date = new Date(item[0]);
+        if (timeRange <= 1) {
+          // For 1 day, show hours and minutes
+          return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+        } else if (timeRange <= 7) {
+          // For 1-7 days, show day and hour
+          return `${date.getDate()}.${date.getMonth() + 1} ${date.getHours()}h`;
+        } else {
+          // For longer periods, show date only
+          return `${date.getDate()}.${date.getMonth() + 1}`;
+        }
+      } catch (e) {
+        console.error('Error formatting date:', e, item[0]);
+        return 'Invalid date';
       }
     });
 
-    const voltageData = dataPoints.map(item => item[1]);
+    const voltageData = dataPoints.map(item => {
+      try {
+        return parseFloat(item[1]);
+      } catch (e) {
+        console.error('Error parsing voltage:', e, item[1]);
+        return null;
+      }
+    }).filter(v => v !== null);
 
     // Create horizontal lines for the acceptable range
     const minVoltageData = Array(labels.length).fill(phaseData.acceptable_range.min);
@@ -247,9 +304,33 @@ function App() {
       </header>
 
       <main className="container mx-auto p-4">
-        {/* Time range selector */}
+        {/* Time range selector and refresh button */}
         <div className="mb-6 bg-white p-4 rounded-lg shadow-md">
-          <h2 className="text-lg font-semibold mb-2">Vremenski period:</h2>
+          <div className="flex justify-between items-center mb-2">
+            <h2 className="text-lg font-semibold">Vremenski period:</h2>
+            <button 
+              onClick={handleManualRefresh}
+              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 flex items-center"
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Osvežavanje...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                  </svg>
+                  Osveži
+                </>
+              )}
+            </button>
+          </div>
           <div className="flex flex-wrap gap-2">
             {[1, 7, 14, 30].map(days => (
               <button
@@ -260,6 +341,7 @@ function App() {
                     ? 'bg-blue-600 text-white' 
                     : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
                 }`}
+                disabled={loading}
               >
                 {days === 1 ? 'Danas' : `${days} dana`}
               </button>
@@ -269,12 +351,32 @@ function App() {
 
         {loading ? (
           <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+              <p className="text-gray-600">Učitavanje podataka...</p>
+            </div>
           </div>
         ) : error ? (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-            <strong className="font-bold">Greška!</strong>
-            <span className="block sm:inline"> {error}</span>
+            <div className="flex">
+              <div className="py-1">
+                <svg className="fill-current h-6 w-6 text-red-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                  <path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zm12.73-1.41A8 8 0 1 0 4.34 4.34a8 8 0 0 0 11.32 11.32zM9 11V9h2v6H9v-4zm0-6h2v2H9V5z"/>
+                </svg>
+              </div>
+              <div>
+                <p className="font-bold">Greška!</p>
+                <p className="text-sm">{error}</p>
+                {retryCount >= 5 && (
+                  <button 
+                    onClick={handleManualRefresh}
+                    className="mt-2 bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-xs"
+                  >
+                    Pokušaj ponovo
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         ) : powerStats ? (
           <div>

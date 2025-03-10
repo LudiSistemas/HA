@@ -192,9 +192,14 @@ async def fetch_power_history(start_time=None, end_time=None):
         
         # Calculate time difference to determine if we need to use significant_changes_only
         # For longer periods, we want fewer data points to avoid overwhelming the API
-        start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-        end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
-        days_diff = (end_dt - start_dt).total_seconds() / 86400  # Convert to days
+        try:
+            start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+            end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+            days_diff = (end_dt - start_dt).total_seconds() / 86400  # Convert to days
+        except ValueError:
+            # Handle ISO format error
+            logger.warning(f"Error parsing dates, using default parameters")
+            days_diff = 1  # Default to 1 day
         
         url = f"{HASS_URL}/api/history/period/{start_time}"
         params = {
@@ -216,18 +221,37 @@ async def fetch_power_history(start_time=None, end_time=None):
                     # Process and organize the data
                     processed_data = {}
                     for entity_data in history_data:
-                        if not entity_data:
+                        if not entity_data or len(entity_data) == 0:
                             continue
                         
-                        entity_id = entity_data[0]["entity_id"]
-                        processed_data[entity_id] = [
-                            {
-                                "state": item["state"],
-                                "timestamp": item["last_updated"],
-                                "attributes": item.get("attributes", {})
-                            }
-                            for item in entity_data
-                        ]
+                        entity_id = entity_data[0].get("entity_id")
+                        if not entity_id:
+                            logger.warning(f"Missing entity_id in response: {entity_data[0]}")
+                            continue
+                            
+                        processed_data[entity_id] = []
+                        
+                        for item in entity_data:
+                            try:
+                                # Check if the required fields exist
+                                if "state" not in item:
+                                    logger.warning(f"Missing 'state' in item: {item}")
+                                    continue
+                                    
+                                # Use last_changed if last_updated is not available
+                                timestamp = item.get("last_updated", item.get("last_changed"))
+                                if not timestamp:
+                                    logger.warning(f"Missing timestamp in item: {item}")
+                                    continue
+                                
+                                processed_data[entity_id].append({
+                                    "state": item["state"],
+                                    "timestamp": timestamp,
+                                    "attributes": item.get("attributes", {})
+                                })
+                            except Exception as e:
+                                logger.warning(f"Error processing history item: {e}")
+                                continue
                     
                     # Log the number of data points received for each sensor
                     for sensor_id, data in processed_data.items():
@@ -243,6 +267,7 @@ async def fetch_power_history(start_time=None, end_time=None):
     
     except Exception as e:
         logger.error(f"Error fetching power history data: {e}")
+        logger.exception("Detailed error:")
         return power_history_cache if power_history_cache else {}
 
 # Initialize the last_cache_key attribute
@@ -276,6 +301,7 @@ async def get_power_stats(days: int = 30):
         # Clear the cache if we're requesting a different time range
         # This ensures we get fresh data when changing the time range
         if days != getattr(get_power_stats, "last_days", None):
+            logger.info(f"Time range changed from {getattr(get_power_stats, 'last_days', 'None')} to {days} days, clearing cache")
             power_history_cache = {}
             last_power_history_update = 0
             get_power_stats.last_days = days
@@ -284,6 +310,7 @@ async def get_power_stats(days: int = 30):
         history_data = await fetch_power_history(start_time)
         
         if not history_data:
+            logger.error("No history data returned from fetch_power_history")
             raise HTTPException(status_code=503, detail="Failed to retrieve power history data")
         
         # Define the acceptable voltage range (230V ±10%)
@@ -294,6 +321,7 @@ async def get_power_stats(days: int = 30):
         stats = {}
         for sensor_id, data in history_data.items():
             if not data:
+                logger.warning(f"No data for sensor {sensor_id}")
                 continue
                 
             # Count readings within and outside the acceptable range
@@ -317,11 +345,12 @@ async def get_power_stats(days: int = 30):
                         below_range_count += 1
                     else:
                         above_range_count += 1
-                except (ValueError, TypeError):
+                except (ValueError, TypeError) as e:
                     # Skip invalid readings
+                    logger.warning(f"Invalid reading for {sensor_id}: {reading.get('state')} - {e}")
                     continue
             
-            if total_readings > 0:
+            if total_readings > 0 and voltage_values:
                 stats[sensor_id] = {
                     "total_readings": total_readings,
                     "in_range_count": in_range_count,
@@ -340,11 +369,18 @@ async def get_power_stats(days: int = 30):
                         "nominal": 230
                     }
                 }
+            else:
+                logger.warning(f"No valid voltage readings for {sensor_id}")
         
+        if not stats:
+            logger.error("No valid statistics could be calculated")
+            raise HTTPException(status_code=503, detail="No valid power statistics could be calculated")
+            
         return stats
     
     except Exception as e:
         logger.error(f"Error calculating power statistics: {e}")
+        logger.exception("Detailed error:")
         raise HTTPException(status_code=500, detail=f"Error calculating power statistics: {str(e)}")
 
 # Initialize the last_days attribute
