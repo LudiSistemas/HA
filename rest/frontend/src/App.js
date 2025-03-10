@@ -52,7 +52,43 @@ function App() {
         throw new Error('No data received from the server');
       }
       
-      setPowerStats(response.data);
+      // Process the data to filter out invalid values
+      const processedData = {};
+      Object.entries(response.data).forEach(([sensorId, data]) => {
+        // Filter out invalid voltage values from voltage_data
+        if (data.voltage_data && Array.isArray(data.voltage_data)) {
+          const filteredVoltageData = data.voltage_data.filter(item => {
+            const voltage = parseFloat(item[1]);
+            return !isNaN(voltage) && voltage > 0 && voltage < 300; // Only keep reasonable voltage values
+          });
+          
+          // Recalculate min, max, avg based on filtered data
+          const voltageValues = filteredVoltageData.map(item => parseFloat(item[1]));
+          
+          if (voltageValues.length > 0) {
+            processedData[sensorId] = {
+              ...data,
+              voltage_data: filteredVoltageData,
+              min_voltage: Math.min(...voltageValues),
+              max_voltage: Math.max(...voltageValues),
+              avg_voltage: voltageValues.reduce((sum, val) => sum + val, 0) / voltageValues.length
+            };
+          } else {
+            // If no valid voltage values, keep original data but set min/max/avg to null
+            processedData[sensorId] = {
+              ...data,
+              voltage_data: [],
+              min_voltage: null,
+              max_voltage: null,
+              avg_voltage: null
+            };
+          }
+        } else {
+          processedData[sensorId] = data;
+        }
+      });
+      
+      setPowerStats(processedData);
       
       // Force chart re-render by updating the key
       setChartKey(Date.now());
@@ -201,7 +237,9 @@ function App() {
 
     const voltageData = dataPoints.map(item => {
       try {
-        return parseFloat(item[1]);
+        const voltage = parseFloat(item[1]);
+        // Filter out invalid voltage values
+        return isNaN(voltage) || voltage <= 0 || voltage > 300 ? null : voltage;
       } catch (e) {
         console.error('Error parsing voltage:', e, item[1]);
         return null;
@@ -262,6 +300,14 @@ function App() {
     if (timeRange === 14) return 'Istorija napona (14 dana)';
     if (timeRange === 30) return 'Istorija napona (30 dana)';
     return `Istorija napona (${timeRange} dana)`;
+  };
+
+  // Format voltage value for display
+  const formatVoltage = (voltage) => {
+    if (voltage === null || voltage === undefined || isNaN(voltage) || voltage <= 0) {
+      return 'N/A';
+    }
+    return voltage.toFixed(1);
   };
 
   const lineChartOptions = {
@@ -390,7 +436,7 @@ function App() {
                     <div className="grid grid-cols-2 gap-2 mb-4">
                       <div className="bg-gray-100 p-2 rounded">
                         <p className="text-sm text-gray-500">Trenutni napon</p>
-                        <p className="text-xl font-semibold">{data.avg_voltage ? data.avg_voltage.toFixed(1) : 'N/A'} V</p>
+                        <p className="text-xl font-semibold">{formatVoltage(data.avg_voltage)} V</p>
                       </div>
                       <div className="bg-gray-100 p-2 rounded">
                         <p className="text-sm text-gray-500">U opsegu</p>
@@ -398,11 +444,11 @@ function App() {
                       </div>
                       <div className="bg-gray-100 p-2 rounded">
                         <p className="text-sm text-gray-500">Min. napon</p>
-                        <p className="text-xl font-semibold">{data.min_voltage ? data.min_voltage.toFixed(1) : 'N/A'} V</p>
+                        <p className="text-xl font-semibold">{formatVoltage(data.min_voltage)} V</p>
                       </div>
                       <div className="bg-gray-100 p-2 rounded">
                         <p className="text-sm text-gray-500">Max. napon</p>
-                        <p className="text-xl font-semibold">{data.max_voltage ? data.max_voltage.toFixed(1) : 'N/A'} V</p>
+                        <p className="text-xl font-semibold">{formatVoltage(data.max_voltage)} V</p>
                       </div>
                     </div>
                     
@@ -449,6 +495,17 @@ function App() {
             <span className="block sm:inline">Nema dostupnih podataka.</span>
           </div>
         )}
+        
+        {/* Information about the measurement device */}
+        <div className="mt-8 bg-white p-4 rounded-lg shadow-md">
+          <h2 className="text-lg font-semibold mb-2">Informacije o merenju</h2>
+          <p className="text-sm text-gray-700">
+            Merenja su izvršena pomoću uređaja <a href="https://minor.rs/pametni-releji/shelly-3em-wifi-modul-za-3-fazno-merenje-potrosnje.html" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Shelly 3EM - WiFi modul za 3-fazno merenje potrošnje</a>.
+          </p>
+          <p className="text-sm text-gray-700 mt-2">
+            Shelly 3EM je trofazni WiFi merač energije i kontrolor kontaktora koji služi za praćenje pojedinačne potrošnje bilo kojih kućnih, kancelarijskih i profesionalnih uređaja. Uređaj ima tri nezavisna merna kanala do 120A, jednu kontrolu kontaktora, 365 dana interne memorije i mogućnost merenja napona sa podešavanjem i javljanjem alarma.
+          </p>
+        </div>
       </main>
 
       <footer className="bg-gray-800 text-white p-4 mt-8">

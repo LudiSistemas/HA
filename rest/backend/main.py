@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from typing import Dict, List, Optional, Any
 import asyncio
 import aiohttp
+from math import isnan
 
 # Load environment variables
 load_dotenv()
@@ -336,6 +337,12 @@ async def get_power_stats(days: int = 30):
             for reading in data:
                 try:
                     voltage = float(reading["state"])
+                    
+                    # Filter out invalid voltage values
+                    if isnan(voltage) or voltage <= 0 or voltage > 300:
+                        logger.warning(f"Invalid voltage value for {sensor_id}: {voltage}")
+                        continue
+                        
                     voltage_values.append(voltage)
                     timestamps.append(reading["timestamp"])
                     
@@ -351,14 +358,16 @@ async def get_power_stats(days: int = 30):
                     continue
             
             if total_readings > 0 and voltage_values:
+                valid_readings = len(voltage_values)
                 stats[sensor_id] = {
                     "total_readings": total_readings,
+                    "valid_readings": valid_readings,
                     "in_range_count": in_range_count,
                     "below_range_count": below_range_count,
                     "above_range_count": above_range_count,
-                    "in_range_percentage": (in_range_count / total_readings) * 100 if total_readings > 0 else 0,
-                    "below_range_percentage": (below_range_count / total_readings) * 100 if total_readings > 0 else 0,
-                    "above_range_percentage": (above_range_count / total_readings) * 100 if total_readings > 0 else 0,
+                    "in_range_percentage": (in_range_count / valid_readings) * 100 if valid_readings > 0 else 0,
+                    "below_range_percentage": (below_range_count / valid_readings) * 100 if valid_readings > 0 else 0,
+                    "above_range_percentage": (above_range_count / valid_readings) * 100 if valid_readings > 0 else 0,
                     "min_voltage": min(voltage_values) if voltage_values else None,
                     "max_voltage": max(voltage_values) if voltage_values else None,
                     "avg_voltage": sum(voltage_values) / len(voltage_values) if voltage_values else None,
@@ -369,6 +378,8 @@ async def get_power_stats(days: int = 30):
                         "nominal": 230
                     }
                 }
+                
+                logger.info(f"Calculated stats for {sensor_id}: {valid_readings} valid readings, min: {stats[sensor_id]['min_voltage']}, max: {stats[sensor_id]['max_voltage']}, avg: {stats[sensor_id]['avg_voltage']}")
             else:
                 logger.warning(f"No valid voltage readings for {sensor_id}")
         
