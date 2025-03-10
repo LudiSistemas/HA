@@ -56,11 +56,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Environment variables
-HASS_URL = os.getenv("HASS_URL")
-HASS_TOKEN = os.getenv("HASS_TOKEN")
-SENSOR_IDS = os.getenv("SENSOR_IDS", "").split(",")
-POWER_SENSOR_IDS = os.getenv("POWER_SENSOR_IDS", "").split(",")
-STATION_ALTITUDE = float(os.getenv("STATION_ALTITUDE", 230))  # Default to Niš altitude
+HASS_URL = settings.HASS_URL
+HASS_TOKEN = settings.HASS_TOKEN
+SENSOR_IDS = settings.sensor_list
+POWER_SENSOR_IDS = settings.power_sensor_list
+STATION_ALTITUDE = settings.STATION_ALTITUDE
 
 # Cache for sensor data
 sensor_cache = {}

@@ -30,6 +30,13 @@ class Settings(BaseSettings):
         if isinstance(self.SENSOR_IDS, str):
             return [s.strip() for s in self.SENSOR_IDS.split(',')]
         return self.SENSOR_IDS
+    
+    @property
+    def power_sensor_list(self) -> List[str]:
+        """Convert POWER_SENSOR_IDS to list format"""
+        if isinstance(self.POWER_SENSOR_IDS, str) and self.POWER_SENSOR_IDS:
+            return [s.strip() for s in self.POWER_SENSOR_IDS.split(',')]
+        return []
 
 @lru_cache()
 def get_settings():

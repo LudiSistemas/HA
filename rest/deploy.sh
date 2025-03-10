@@ -39,6 +39,12 @@ if ! command_exists pip3; then
   exit 1
 fi
 
+# Check if we're in the right directory
+if [ ! -d "frontend" ] || [ ! -d "backend" ]; then
+  echo "Error: This script must be run from the root directory of the project (where frontend and backend directories are located)."
+  exit 1
+fi
+
 # Build frontend
 echo ""
 echo "Building frontend..."
