@@ -111,7 +111,16 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": "Internal server error"}
     )
 
+# Include the API router
 app.include_router(router)
+
+# Root route
+@app.get("/")
+async def root():
+    return {
+        "message": "Power Monitoring API is running",
+        "docs_url": "/api/docs"
+    }
 
 async def fetch_power_sensor_data():
     """Fetch current power sensor data from Home Assistant"""
