@@ -315,8 +315,14 @@ async def get_power_stats(days: int = 30):
             raise HTTPException(status_code=503, detail="Failed to retrieve power history data")
         
         # Define the acceptable voltage range (230V ±10%)
-        min_voltage = 207  # 230 - 10%
-        max_voltage = 253  # 230 + 10%
+        min_acceptable = 207  # 230 - 10%
+        max_acceptable = 253  # 230 + 10%
+        
+        # Define realistic voltage range for filtering out bad readings
+        # Realistically, grid voltage shouldn't drop below 180V or exceed 260V
+        # even during severe conditions
+        REALISTIC_MIN_VOLTAGE = 100
+        REALISTIC_MAX_VOLTAGE = 270
         
         # Calculate statistics for each phase
         stats = {}
@@ -334,31 +340,52 @@ async def get_power_stats(days: int = 30):
             voltage_values = []
             timestamps = []
             
+            # First pass: collect all valid voltage values
             for reading in data:
                 try:
-                    voltage = float(reading["state"])
+                    voltage_str = reading["state"]
+                    voltage = float(voltage_str)
                     
-                    # Filter out invalid voltage values
-                    if isnan(voltage) or voltage <= 0 or voltage > 300:
-                        logger.warning(f"Invalid voltage value for {sensor_id}: {voltage}")
+                    # Filter out unrealistic voltage values
+                    if (isnan(voltage) or 
+                        voltage < REALISTIC_MIN_VOLTAGE or 
+                        voltage > REALISTIC_MAX_VOLTAGE):
+                        logger.warning(f"Unrealistic voltage value for {sensor_id}: {voltage} (from '{voltage_str}')")
                         continue
                         
                     voltage_values.append(voltage)
                     timestamps.append(reading["timestamp"])
-                    
-                    if min_voltage <= voltage <= max_voltage:
-                        in_range_count += 1
-                    elif voltage < min_voltage:
-                        below_range_count += 1
-                    else:
-                        above_range_count += 1
                 except (ValueError, TypeError) as e:
                     # Skip invalid readings
                     logger.warning(f"Invalid reading for {sensor_id}: {reading.get('state')} - {e}")
                     continue
             
-            if total_readings > 0 and voltage_values:
+            # Log all voltage values for debugging
+            if len(voltage_values) > 0:
+                logger.info(f"Voltage values for {sensor_id}: min={min(voltage_values)}, max={max(voltage_values)}, count={len(voltage_values)}")
+                # Log the first few and last few values
+                sample_size = min(5, len(voltage_values))
+                logger.info(f"First {sample_size} values: {voltage_values[:sample_size]}")
+                logger.info(f"Last {sample_size} values: {voltage_values[-sample_size:]}")
+            
+            # Second pass: calculate statistics
+            if voltage_values:
                 valid_readings = len(voltage_values)
+                
+                # Calculate min, max, avg
+                min_voltage = min(voltage_values)
+                max_voltage = max(voltage_values)
+                avg_voltage = sum(voltage_values) / valid_readings
+                
+                # Count readings in different ranges
+                for voltage in voltage_values:
+                    if min_acceptable <= voltage <= max_acceptable:
+                        in_range_count += 1
+                    elif voltage < min_acceptable:
+                        below_range_count += 1
+                    else:
+                        above_range_count += 1
+                
                 stats[sensor_id] = {
                     "total_readings": total_readings,
                     "valid_readings": valid_readings,
@@ -368,18 +395,18 @@ async def get_power_stats(days: int = 30):
                     "in_range_percentage": (in_range_count / valid_readings) * 100 if valid_readings > 0 else 0,
                     "below_range_percentage": (below_range_count / valid_readings) * 100 if valid_readings > 0 else 0,
                     "above_range_percentage": (above_range_count / valid_readings) * 100 if valid_readings > 0 else 0,
-                    "min_voltage": min(voltage_values) if voltage_values else None,
-                    "max_voltage": max(voltage_values) if voltage_values else None,
-                    "avg_voltage": sum(voltage_values) / len(voltage_values) if voltage_values else None,
+                    "min_voltage": min_voltage,
+                    "max_voltage": max_voltage,
+                    "avg_voltage": avg_voltage,
                     "voltage_data": list(zip(timestamps, voltage_values)),
                     "acceptable_range": {
-                        "min": min_voltage,
-                        "max": max_voltage,
+                        "min": min_acceptable,
+                        "max": max_acceptable,
                         "nominal": 230
                     }
                 }
                 
-                logger.info(f"Calculated stats for {sensor_id}: {valid_readings} valid readings, min: {stats[sensor_id]['min_voltage']}, max: {stats[sensor_id]['max_voltage']}, avg: {stats[sensor_id]['avg_voltage']}")
+                logger.info(f"Calculated stats for {sensor_id}: {valid_readings} valid readings, min: {min_voltage}, max: {max_voltage}, avg: {avg_voltage}")
             else:
                 logger.warning(f"No valid voltage readings for {sensor_id}")
         

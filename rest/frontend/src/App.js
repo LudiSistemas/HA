@@ -52,6 +52,10 @@ function App() {
         throw new Error('No data received from the server');
       }
       
+      // Define realistic voltage range
+      const REALISTIC_MIN_VOLTAGE = 100;
+      const REALISTIC_MAX_VOLTAGE = 280;
+      
       // Process the data to filter out invalid values
       const processedData = {};
       Object.entries(response.data).forEach(([sensorId, data]) => {
@@ -59,7 +63,9 @@ function App() {
         if (data.voltage_data && Array.isArray(data.voltage_data)) {
           const filteredVoltageData = data.voltage_data.filter(item => {
             const voltage = parseFloat(item[1]);
-            return !isNaN(voltage) && voltage > 0 && voltage < 300; // Only keep reasonable voltage values
+            return !isNaN(voltage) && 
+                   voltage >= REALISTIC_MIN_VOLTAGE && 
+                   voltage <= REALISTIC_MAX_VOLTAGE;
           });
           
           // Recalculate min, max, avg based on filtered data
@@ -73,6 +79,8 @@ function App() {
               max_voltage: Math.max(...voltageValues),
               avg_voltage: voltageValues.reduce((sum, val) => sum + val, 0) / voltageValues.length
             };
+            
+            console.log(`Processed ${sensorId}: min=${processedData[sensorId].min_voltage}, max=${processedData[sensorId].max_voltage}`);
           } else {
             // If no valid voltage values, keep original data but set min/max/avg to null
             processedData[sensorId] = {
@@ -191,6 +199,10 @@ function App() {
   const getLineChartData = (phaseData) => {
     if (!phaseData || !phaseData.voltage_data || phaseData.voltage_data.length === 0) return null;
 
+    // Define realistic voltage range
+    const REALISTIC_MIN_VOLTAGE = 180;
+    const REALISTIC_MAX_VOLTAGE = 260;
+
     // Sort data by timestamp
     const sortedData = [...phaseData.voltage_data].sort((a, b) => new Date(a[0]) - new Date(b[0]));
     
@@ -238,8 +250,10 @@ function App() {
     const voltageData = dataPoints.map(item => {
       try {
         const voltage = parseFloat(item[1]);
-        // Filter out invalid voltage values
-        return isNaN(voltage) || voltage <= 0 || voltage > 300 ? null : voltage;
+        // Filter out invalid voltage values using realistic range
+        return isNaN(voltage) || 
+               voltage < REALISTIC_MIN_VOLTAGE || 
+               voltage > REALISTIC_MAX_VOLTAGE ? null : voltage;
       } catch (e) {
         console.error('Error parsing voltage:', e, item[1]);
         return null;
