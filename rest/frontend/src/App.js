@@ -70,12 +70,44 @@ function App() {
           const voltageValues = filteredVoltageData.map(item => parseFloat(item[1]));
           
           if (voltageValues.length > 0) {
+            // Calculate new statistics based on filtered data
+            const minVoltage = Math.min(...voltageValues);
+            const maxVoltage = Math.max(...voltageValues);
+            const avgVoltage = voltageValues.reduce((sum, val) => sum + val, 0) / voltageValues.length;
+            
+            // Recalculate in-range, below-range, and above-range counts
+            const minAcceptable = data.acceptable_range.min;
+            const maxAcceptable = data.acceptable_range.max;
+            
+            let inRangeCount = 0;
+            let belowRangeCount = 0;
+            let aboveRangeCount = 0;
+            
+            voltageValues.forEach(voltage => {
+              if (voltage >= minAcceptable && voltage <= maxAcceptable) {
+                inRangeCount++;
+              } else if (voltage < minAcceptable) {
+                belowRangeCount++;
+              } else {
+                aboveRangeCount++;
+              }
+            });
+            
+            const validReadings = voltageValues.length;
+            
             processedData[sensorId] = {
               ...data,
               voltage_data: filteredVoltageData,
-              min_voltage: Math.min(...voltageValues),
-              max_voltage: Math.max(...voltageValues),
-              avg_voltage: voltageValues.reduce((sum, val) => sum + val, 0) / voltageValues.length
+              min_voltage: minVoltage,
+              max_voltage: maxVoltage,
+              avg_voltage: avgVoltage,
+              valid_readings: validReadings,
+              in_range_count: inRangeCount,
+              below_range_count: belowRangeCount,
+              above_range_count: aboveRangeCount,
+              in_range_percentage: (inRangeCount / validReadings) * 100,
+              below_range_percentage: (belowRangeCount / validReadings) * 100,
+              above_range_percentage: (aboveRangeCount / validReadings) * 100
             };
             
             console.log(`Processed ${sensorId}: min=${processedData[sensorId].min_voltage}, max=${processedData[sensorId].max_voltage}`);
