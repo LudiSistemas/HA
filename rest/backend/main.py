@@ -291,32 +291,27 @@ async def get_power_history(start_time: Optional[str] = None, end_time: Optional
     return history_data
 
 @app.get("/api/power/stats")
-async def get_power_stats(days: int = 30):
-    """Get power statistics for voltage quality analysis"""
-    global power_history_cache, last_power_history_update
-    
+async def get_power_stats(days: int = 1, start_time: str = None, end_time: str = None):
+    """Get power statistics for the specified time period"""
     try:
-        # Calculate the start time based on the requested days
-        start_time = (datetime.now() - timedelta(days=days)).isoformat()
-        
-        # Clear the cache if we're requesting a different time range
-        # This ensures we get fresh data when changing the time range
-        if days != getattr(get_power_stats, "last_days", None):
-            logger.info(f"Time range changed from {getattr(get_power_stats, 'last_days', 'None')} to {days} days, clearing cache")
-            power_history_cache = {}
-            last_power_history_update = 0
-            get_power_stats.last_days = days
-        
-        # Fetch the historical data
-        history_data = await fetch_power_history(start_time)
+        # If start_time and end_time are provided, use them directly
+        if start_time and end_time:
+            logger.info(f"Fetching power stats from {start_time} to {end_time}")
+            history_data = await fetch_power_history(start_time=start_time, end_time=end_time)
+        else:
+            # Otherwise, calculate based on days parameter
+            end_time = datetime.now().isoformat()
+            start_time = (datetime.now() - timedelta(days=days)).isoformat()
+            logger.info(f"Fetching power stats for last {days} days (from {start_time} to {end_time})")
+            history_data = await fetch_power_history(start_time=start_time, end_time=end_time)
         
         if not history_data:
-            logger.error("No history data returned from fetch_power_history")
-            raise HTTPException(status_code=503, detail="Failed to retrieve power history data")
+            logger.error("No history data received")
+            raise HTTPException(status_code=503, detail="No power history data available")
         
-        # Define the acceptable voltage range (230V ±10%)
-        min_acceptable = 207  # 230 - 10%
-        max_acceptable = 253  # 230 + 10%
+        # Define acceptable voltage range
+        min_acceptable = 207  # -10% of nominal 230V
+        max_acceptable = 253  # +10% of nominal 230V
         
         # Define threshold for obvious measurement errors
         # Only filter out values that are clearly errors (below 100V)
@@ -394,7 +389,7 @@ async def get_power_stats(days: int = 30):
                     "min_voltage": min_voltage,
                     "max_voltage": max_voltage,
                     "avg_voltage": avg_voltage,
-                    "voltage_data": list(zip(timestamps, voltage_values)),
+                    "voltage_data": list(zip(timestamps, [str(v) for v in voltage_values])),
                     "acceptable_range": {
                         "min": min_acceptable,
                         "max": max_acceptable,
@@ -409,16 +404,12 @@ async def get_power_stats(days: int = 30):
         if not stats:
             logger.error("No valid statistics could be calculated")
             raise HTTPException(status_code=503, detail="No valid power statistics could be calculated")
-            
+        
         return stats
-    
     except Exception as e:
-        logger.error(f"Error calculating power statistics: {e}")
+        logger.error(f"Error getting power stats: {e}")
         logger.exception("Detailed error:")
-        raise HTTPException(status_code=500, detail=f"Error calculating power statistics: {str(e)}")
-
-# Initialize the last_days attribute
-get_power_stats.last_days = None
+        raise HTTPException(status_code=500, detail=f"Error getting power statistics: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

@@ -39,121 +39,44 @@ function App() {
     borderColor: 'rgba(255, 255, 255, 1)'
   };
 
-  // Function to fetch power stats
-  const fetchPowerStats = async () => {
+  // Function to fetch data from the API
+  const fetchData = async (startTime, endTime) => {
     try {
       setLoading(true);
-      console.log(`Fetching power stats for ${timeRange} days...`);
-      const response = await api.get(`/api/power/stats?days=${timeRange}`);
-      console.log('Received power stats:', response.data);
       
-      // Check if we have valid data
-      if (!response.data || Object.keys(response.data).length === 0) {
-        throw new Error('No data received from the server');
+      // Log the time range we're fetching
+      console.log(`Fetching data from ${startTime} to ${endTime}`);
+      
+      // Construct the URL with query parameters
+      let url = '/api/power/stats';
+      
+      // Add query parameters if provided
+      const params = new URLSearchParams();
+      if (startTime) params.append('start_time', startTime);
+      if (endTime) params.append('end_time', endTime);
+      
+      // If no specific time range is provided, use the days parameter
+      if (!startTime && !endTime && timeRange) {
+        params.append('days', timeRange);
       }
       
-      // Define threshold for obvious measurement errors
-      const ERROR_THRESHOLD = 100;
+      // Append the query string to the URL if we have parameters
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
       
-      // Process the data to filter out only obvious errors
-      const processedData = {};
-      Object.entries(response.data).forEach(([sensorId, data]) => {
-        // Filter out invalid voltage values from voltage_data
-        if (data.voltage_data && Array.isArray(data.voltage_data)) {
-          const filteredVoltageData = data.voltage_data.filter(item => {
-            const voltage = parseFloat(item[1]);
-            // Filter out only obvious errors (below 100V)
-            return !isNaN(voltage) && voltage >= ERROR_THRESHOLD;
-          });
-          
-          // Recalculate min, max, avg based on filtered data
-          const voltageValues = filteredVoltageData.map(item => parseFloat(item[1]));
-          
-          if (voltageValues.length > 0) {
-            // Calculate new statistics based on filtered data
-            const minVoltage = Math.min(...voltageValues);
-            const maxVoltage = Math.max(...voltageValues);
-            const avgVoltage = voltageValues.reduce((sum, val) => sum + val, 0) / voltageValues.length;
-            
-            // Recalculate in-range, below-range, and above-range counts
-            const minAcceptable = data.acceptable_range.min;
-            const maxAcceptable = data.acceptable_range.max;
-            
-            let inRangeCount = 0;
-            let belowRangeCount = 0;
-            let aboveRangeCount = 0;
-            
-            voltageValues.forEach(voltage => {
-              if (voltage >= minAcceptable && voltage <= maxAcceptable) {
-                inRangeCount++;
-              } else if (voltage < minAcceptable) {
-                belowRangeCount++;
-              } else {
-                aboveRangeCount++;
-              }
-            });
-            
-            const validReadings = voltageValues.length;
-            
-            processedData[sensorId] = {
-              ...data,
-              voltage_data: filteredVoltageData,
-              min_voltage: minVoltage,
-              max_voltage: maxVoltage,
-              avg_voltage: avgVoltage,
-              valid_readings: validReadings,
-              in_range_count: inRangeCount,
-              below_range_count: belowRangeCount,
-              above_range_count: aboveRangeCount,
-              in_range_percentage: (inRangeCount / validReadings) * 100,
-              below_range_percentage: (belowRangeCount / validReadings) * 100,
-              above_range_percentage: (aboveRangeCount / validReadings) * 100
-            };
-            
-            console.log(`Processed ${sensorId}: min=${processedData[sensorId].min_voltage}, max=${processedData[sensorId].max_voltage}`);
-          } else {
-            // If no valid voltage values, keep original data but set min/max/avg to null
-            processedData[sensorId] = {
-              ...data,
-              voltage_data: [],
-              min_voltage: null,
-              max_voltage: null,
-              avg_voltage: null
-            };
-          }
-        } else {
-          processedData[sensorId] = data;
-        }
-      });
+      console.log(`API request URL: ${url}`);
       
-      setPowerStats(processedData);
+      const response = await api.get(url);
+      setPowerStats(response.data);
       
       // Force chart re-render by updating the key
       setChartKey(Date.now());
       
       setError(null);
-      setRetryCount(0); // Reset retry count on success
     } catch (err) {
-      console.error('Error fetching power stats:', err);
-      
-      // Get a user-friendly error message
-      let errorMessage = 'Greška pri učitavanju podataka. Molimo pokušajte ponovo kasnije.';
-      if (err.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
-        errorMessage = `Greška servera: ${err.response.status} - ${err.response.data?.detail || 'Nepoznata greška'}`;
-      } else if (err.request) {
-        // The request was made but no response was received
-        errorMessage = 'Nije moguće povezati se sa serverom. Proverite internet konekciju.';
-      } else {
-        // Something happened in setting up the request that triggered an Error
-        errorMessage = `Greška: ${err.message}`;
-      }
-      
-      setError(errorMessage);
-      
-      // Increment retry count
-      setRetryCount(prev => prev + 1);
+      console.error('Error fetching data:', err);
+      setError('Greška pri učitavanju podataka. Molimo pokušajte ponovo kasnije.');
     } finally {
       setLoading(false);
     }
@@ -161,10 +84,28 @@ function App() {
 
   // Effect to fetch data when component mounts or timeRange changes
   useEffect(() => {
-    fetchPowerStats();
+    // Set initial time range to a valid value (1, 5, or 10)
+    const validTimeRanges = [1, 5, 10];
+    if (!validTimeRanges.includes(timeRange)) {
+      // If current timeRange is not valid, set it to 1 day
+      setTimeRange(1);
+      // Calculate start and end dates for 1 day
+      const endDate = new Date();
+      const startDate = new Date(endDate);
+      startDate.setHours(endDate.getHours() - 24);
+      fetchData(startDate.toISOString(), endDate.toISOString());
+    } else {
+      // If timeRange is already valid, just fetch data
+      fetchData(null, null);
+    }
 
     // Set up polling using the configured interval
-    const intervalId = setInterval(fetchPowerStats, REFRESH_INTERVAL);
+    const intervalId = setInterval(() => {
+      const now = new Date();
+      const endTime = now.toISOString();
+      const startTime = new Date(now.getTime() - REFRESH_INTERVAL).toISOString();
+      fetchData(startTime, endTime);
+    }, REFRESH_INTERVAL);
 
     // Clean up on component unmount
     return () => clearInterval(intervalId);
@@ -177,7 +118,7 @@ function App() {
       console.log(`Retrying in ${backoffTime/1000} seconds (attempt ${retryCount + 1}/5)...`);
       
       const retryTimer = setTimeout(() => {
-        fetchPowerStats();
+        fetchData(null, null);
       }, backoffTime);
       
       return () => clearTimeout(retryTimer);
@@ -186,14 +127,31 @@ function App() {
 
   // Handle time range change
   const handleTimeRangeChange = (days) => {
-    console.log(`Changing time range to ${days} days`);
     setTimeRange(days);
-    // No need to call fetchPowerStats() here as the useEffect will trigger due to timeRange change
+    
+    // Calculate the start date based on the selected time range
+    const endDate = new Date();
+    let startDate;
+    
+    if (days === 1) {
+      // For "Today", use exactly 24 hours ago
+      startDate = new Date(endDate);
+      startDate.setHours(endDate.getHours() - 24);
+    } else {
+      // For other ranges, use the specified number of days
+      startDate = new Date(endDate);
+      startDate.setDate(endDate.getDate() - days);
+    }
+    
+    console.log(`Setting time range: ${days} days, from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+    
+    // Trigger data fetch with the new time range
+    fetchData(startDate.toISOString(), endDate.toISOString());
   };
 
   // Handle manual refresh
   const handleManualRefresh = () => {
-    fetchPowerStats();
+    fetchData(null, null);
   };
 
   // Prepare pie chart data for a phase
@@ -235,26 +193,66 @@ function App() {
     // Sort data by timestamp
     const sortedData = [...phaseData.voltage_data].sort((a, b) => new Date(a[0]) - new Date(b[0]));
     
+    // Calculate the start time for filtering (for "Today" option)
+    let startTimeFilter = null;
+    if (timeRange === 1) {
+      const now = new Date();
+      startTimeFilter = new Date(now);
+      startTimeFilter.setHours(now.getHours() - 24);
+      console.log(`Filtering data for last 24 hours, starting from: ${startTimeFilter.toISOString()}`);
+    }
+    
+    // Filter data by time range if needed (for "Today" option)
+    let filteredByTimeData = sortedData;
+    if (startTimeFilter) {
+      filteredByTimeData = sortedData.filter(item => {
+        const itemDate = new Date(item[0]);
+        return itemDate >= startTimeFilter;
+      });
+      console.log(`Filtered data points by time: ${filteredByTimeData.length} out of ${sortedData.length}`);
+      
+      // If we have very few points after filtering, use all data
+      if (filteredByTimeData.length < 10 && sortedData.length > 10) {
+        console.log("Too few points after filtering, using all available data");
+        filteredByTimeData = sortedData;
+      }
+    }
+    
     // Determine how many data points to show based on time range
     let dataPoints;
     if (timeRange <= 1) {
-      // For 1 day, show all data points (or up to 288 for hourly samples)
-      dataPoints = sortedData;
-    } else if (timeRange <= 7) {
-      // For 1-7 days, sample every hour (approximately)
-      const samplingRate = Math.max(1, Math.floor(sortedData.length / (24 * 7)));
-      dataPoints = sortedData.filter((_, index) => index % samplingRate === 0);
+      // For 1 day, show all data points without sampling
+      dataPoints = filteredByTimeData;
+      console.log(`Using all ${dataPoints.length} data points for 24-hour view`);
+    } else if (timeRange <= 5) {
+      // For 5 days, sample appropriately
+      const samplingRate = Math.max(1, Math.floor(filteredByTimeData.length / (24 * 5)));
+      dataPoints = filteredByTimeData.filter((_, index) => index % samplingRate === 0);
+      console.log(`Sampled to ${dataPoints.length} data points for 5-day view (rate: ${samplingRate})`);
     } else {
-      // For longer periods, sample appropriately to show around 100-200 points
-      const samplingRate = Math.max(1, Math.floor(sortedData.length / 150));
-      dataPoints = sortedData.filter((_, index) => index % samplingRate === 0);
+      // For 10 days, sample more aggressively
+      const samplingRate = Math.max(1, Math.floor(filteredByTimeData.length / 150));
+      dataPoints = filteredByTimeData.filter((_, index) => index % samplingRate === 0);
+      console.log(`Sampled to ${dataPoints.length} data points for 10-day view (rate: ${samplingRate})`);
     }
     
     // If we still have too many points, limit to the most recent ones
-    const maxPoints = 200;
+    const maxPoints = 300; // Increased from 200 to show more detail
     if (dataPoints.length > maxPoints) {
+      console.log(`Limiting from ${dataPoints.length} to ${maxPoints} data points`);
       dataPoints = dataPoints.slice(-maxPoints);
     }
+    
+    // Make sure we have at least some minimum number of points
+    const minPoints = 24; // At least one point per hour for daily view
+    if (dataPoints.length < minPoints && filteredByTimeData.length >= minPoints) {
+      console.log(`Too few points (${dataPoints.length}), increasing to at least ${minPoints}`);
+      const samplingRate = Math.floor(filteredByTimeData.length / minPoints);
+      dataPoints = filteredByTimeData.filter((_, index) => index % Math.max(1, samplingRate) === 0);
+    }
+    
+    // Log the number of data points
+    console.log(`Using ${dataPoints.length} data points for chart with time range ${timeRange} days`);
 
     // Format the dates for display
     const labels = dataPoints.map(item => {
@@ -263,11 +261,11 @@ function App() {
         if (timeRange <= 1) {
           // For 1 day, show hours and minutes
           return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-        } else if (timeRange <= 7) {
-          // For 1-7 days, show day and hour
+        } else if (timeRange <= 5) {
+          // For 5 days, show day and hour
           return `${date.getDate()}.${date.getMonth() + 1} ${date.getHours()}h`;
         } else {
-          // For longer periods, show date only
+          // For 10 days, show date only
           return `${date.getDate()}.${date.getMonth() + 1}`;
         }
       } catch (e) {
@@ -336,10 +334,9 @@ function App() {
 
   // Get chart title based on time range
   const getChartTitle = () => {
-    if (timeRange === 1) return 'Istorija napona (danas)';
-    if (timeRange === 7) return 'Istorija napona (7 dana)';
-    if (timeRange === 14) return 'Istorija napona (14 dana)';
-    if (timeRange === 30) return 'Istorija napona (30 dana)';
+    if (timeRange === 1) return 'Istorija napona (24 sata)';
+    if (timeRange === 5) return 'Istorija napona (5 dana)';
+    if (timeRange === 10) return 'Istorija napona (10 dana)';
     return `Istorija napona (${timeRange} dana)`;
   };
 
@@ -419,7 +416,7 @@ function App() {
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
-            {[1, 7, 14, 30].map(days => (
+            {[1, 5, 10].map(days => (
               <button
                 key={days}
                 onClick={() => handleTimeRangeChange(days)}
