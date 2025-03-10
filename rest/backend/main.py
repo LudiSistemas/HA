@@ -184,22 +184,42 @@ async def fetch_power_history(start_time=None, end_time=None):
     if not start_time:
         # Default to last 24 hours
         start_time = (datetime.now() - timedelta(days=1)).isoformat()
+        logger.info(f"No start_time provided, using default: {start_time}")
     
     if not end_time:
         end_time = datetime.now().isoformat()
+        logger.info(f"No end_time provided, using default: {end_time}")
     
     try:
         logger.info(f"Fetching power history from {start_time} to {end_time}")
         
-        # Calculate time difference to determine if we need to use significant_changes_only
-        # For longer periods, we want fewer data points to avoid overwhelming the API
+        # Parse the dates to ensure they're valid
         try:
             start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
             end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+            
+            # Calculate time difference in days
             days_diff = (end_dt - start_dt).total_seconds() / 86400  # Convert to days
-        except ValueError:
+            logger.info(f"Time range is {days_diff:.2f} days")
+            
+            # Ensure the time range is not too large (limit to 30 days max)
+            if days_diff > 30:
+                logger.warning(f"Time range too large ({days_diff:.2f} days), limiting to 30 days")
+                start_dt = end_dt - timedelta(days=30)
+                start_time = start_dt.isoformat()
+                days_diff = 30
+                
+            # Ensure we have at least some minimum time range
+            if days_diff < 0.1:  # Less than 2.4 hours
+                logger.warning(f"Time range too small ({days_diff:.2f} days), using at least 24 hours")
+                start_dt = end_dt - timedelta(days=1)
+                start_time = start_dt.isoformat()
+                days_diff = 1
+        except ValueError as e:
             # Handle ISO format error
-            logger.warning(f"Error parsing dates, using default parameters")
+            logger.warning(f"Error parsing dates: {e}, using default parameters")
+            end_time = datetime.now().isoformat()
+            start_time = (datetime.now() - timedelta(days=1)).isoformat()
             days_diff = 1  # Default to 1 day
         
         url = f"{HASS_URL}/api/history/period/{start_time}"
@@ -245,6 +265,12 @@ async def fetch_power_history(start_time=None, end_time=None):
                                     logger.warning(f"Missing timestamp in item: {item}")
                                     continue
                                 
+                                # Parse the timestamp to check if it's within our requested range
+                                item_dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                                if item_dt < start_dt or item_dt > end_dt:
+                                    # Skip items outside our requested time range
+                                    continue
+                                
                                 processed_data[entity_id].append({
                                     "state": item["state"],
                                     "timestamp": timestamp,
@@ -257,6 +283,16 @@ async def fetch_power_history(start_time=None, end_time=None):
                     # Log the number of data points received for each sensor
                     for sensor_id, data in processed_data.items():
                         logger.info(f"Received {len(data)} data points for {sensor_id}")
+                        
+                        # Log the time range of the data
+                        if data:
+                            try:
+                                first_timestamp = datetime.fromisoformat(data[0]["timestamp"].replace('Z', '+00:00'))
+                                last_timestamp = datetime.fromisoformat(data[-1]["timestamp"].replace('Z', '+00:00'))
+                                data_range = (last_timestamp - first_timestamp).total_seconds() / 3600  # hours
+                                logger.info(f"Data for {sensor_id} spans {data_range:.2f} hours, from {first_timestamp} to {last_timestamp}")
+                            except Exception as e:
+                                logger.warning(f"Error calculating data time range: {e}")
                     
                     power_history_cache = processed_data
                     last_power_history_update = current_time

@@ -52,12 +52,29 @@ function App() {
       
       // Add query parameters if provided
       const params = new URLSearchParams();
-      if (startTime) params.append('start_time', startTime);
-      if (endTime) params.append('end_time', endTime);
       
-      // If no specific time range is provided, use the days parameter
-      if (!startTime && !endTime && timeRange) {
-        params.append('days', timeRange);
+      // Always use explicit start_time and end_time for better control
+      if (startTime && endTime) {
+        params.append('start_time', startTime);
+        params.append('end_time', endTime);
+      } else if (timeRange) {
+        // If no specific times provided, calculate them based on timeRange
+        const endDate = new Date();
+        let startDate;
+        
+        if (timeRange === 1) {
+          // For "Today", use exactly 24 hours ago
+          startDate = new Date(endDate);
+          startDate.setHours(endDate.getHours() - 24);
+        } else {
+          // For other ranges, use the specified number of days
+          startDate = new Date(endDate);
+          startDate.setDate(endDate.getDate() - timeRange);
+        }
+        
+        params.append('start_time', startDate.toISOString());
+        params.append('end_time', endDate.toISOString());
+        console.log(`Calculated time range: from ${startDate.toISOString()} to ${endDate.toISOString()}`);
       }
       
       // Append the query string to the URL if we have parameters
@@ -89,22 +106,43 @@ function App() {
     if (!validTimeRanges.includes(timeRange)) {
       // If current timeRange is not valid, set it to 1 day
       setTimeRange(1);
-      // Calculate start and end dates for 1 day
-      const endDate = new Date();
-      const startDate = new Date(endDate);
-      startDate.setHours(endDate.getHours() - 24);
-      fetchData(startDate.toISOString(), endDate.toISOString());
-    } else {
-      // If timeRange is already valid, just fetch data
-      fetchData(null, null);
     }
+    
+    // Always calculate explicit start and end times
+    const endDate = new Date();
+    let startDate;
+    
+    if (timeRange === 1) {
+      // For "Today", use exactly 24 hours ago
+      startDate = new Date(endDate);
+      startDate.setHours(endDate.getHours() - 24);
+    } else {
+      // For other ranges, use the specified number of days
+      startDate = new Date(endDate);
+      startDate.setDate(endDate.getDate() - timeRange);
+    }
+    
+    console.log(`Initial fetch for time range: ${timeRange} days, from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+    fetchData(startDate.toISOString(), endDate.toISOString());
 
     // Set up polling using the configured interval
     const intervalId = setInterval(() => {
+      // For each poll, recalculate the time range to ensure we always have the latest data
       const now = new Date();
-      const endTime = now.toISOString();
-      const startTime = new Date(now.getTime() - REFRESH_INTERVAL).toISOString();
-      fetchData(startTime, endTime);
+      let start;
+      
+      if (timeRange === 1) {
+        // For "Today", use exactly 24 hours ago from now
+        start = new Date(now);
+        start.setHours(now.getHours() - 24);
+      } else {
+        // For other ranges, use the specified number of days
+        start = new Date(now);
+        start.setDate(now.getDate() - timeRange);
+      }
+      
+      console.log(`Polling for time range: ${timeRange} days, from ${start.toISOString()} to ${now.toISOString()}`);
+      fetchData(start.toISOString(), now.toISOString());
     }, REFRESH_INTERVAL);
 
     // Clean up on component unmount
