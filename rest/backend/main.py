@@ -177,6 +177,7 @@ async def fetch_power_history(start_time=None, end_time=None):
     if (current_time - last_power_history_update < POWER_HISTORY_CACHE_DURATION and 
         power_history_cache and 
         getattr(fetch_power_history, "last_cache_key", None) == cache_key):
+        logger.info(f"Using cached power history data for {cache_key}")
         return power_history_cache
     
     if not start_time:
@@ -188,11 +189,24 @@ async def fetch_power_history(start_time=None, end_time=None):
     
     try:
         logger.info(f"Fetching power history from {start_time} to {end_time}")
+        
+        # Calculate time difference to determine if we need to use significant_changes_only
+        # For longer periods, we want fewer data points to avoid overwhelming the API
+        start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+        end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+        days_diff = (end_dt - start_dt).total_seconds() / 86400  # Convert to days
+        
         url = f"{HASS_URL}/api/history/period/{start_time}"
         params = {
             "filter_entity_id": ",".join(POWER_SENSOR_IDS),
             "end_time": end_time,
+            # For periods longer than 2 days, only get significant changes to reduce data volume
+            "significant_changes_only": "true" if days_diff > 2 else "false",
+            # For very long periods, also use minimal_response to further reduce data
+            "minimal_response": "true" if days_diff > 14 else "false",
         }
+        
+        logger.info(f"History API params: {params}")
         
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers, params=params) as response:
@@ -214,6 +228,10 @@ async def fetch_power_history(start_time=None, end_time=None):
                             }
                             for item in entity_data
                         ]
+                    
+                    # Log the number of data points received for each sensor
+                    for sensor_id, data in processed_data.items():
+                        logger.info(f"Received {len(data)} data points for {sensor_id}")
                     
                     power_history_cache = processed_data
                     last_power_history_update = current_time

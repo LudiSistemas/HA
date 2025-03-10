@@ -21,6 +21,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [timeRange, setTimeRange] = useState(DEFAULT_TIME_RANGE);
+  const [chartKey, setChartKey] = useState(Date.now()); // Add a key to force chart re-render
 
   // Map sensor IDs to Serbian phase names
   const phaseNames = {
@@ -45,6 +46,10 @@ function App() {
       const response = await api.get(`/api/power/stats?days=${timeRange}`);
       console.log('Received power stats:', response.data);
       setPowerStats(response.data);
+      
+      // Force chart re-render by updating the key
+      setChartKey(Date.now());
+      
       setError(null);
     } catch (err) {
       console.error('Error fetching power stats:', err);
@@ -105,16 +110,46 @@ function App() {
   const getLineChartData = (phaseData) => {
     if (!phaseData || !phaseData.voltage_data || phaseData.voltage_data.length === 0) return null;
 
-    // Sort data by timestamp and take the last 100 points for better visualization
+    // Sort data by timestamp
     const sortedData = [...phaseData.voltage_data].sort((a, b) => new Date(a[0]) - new Date(b[0]));
-    const limitedData = sortedData.slice(-100);
+    
+    // Determine how many data points to show based on time range
+    let dataPoints;
+    if (timeRange <= 1) {
+      // For 1 day, show all data points (or up to 288 for hourly samples)
+      dataPoints = sortedData;
+    } else if (timeRange <= 7) {
+      // For 1-7 days, sample every hour (approximately)
+      const samplingRate = Math.max(1, Math.floor(sortedData.length / (24 * 7)));
+      dataPoints = sortedData.filter((_, index) => index % samplingRate === 0);
+    } else {
+      // For longer periods, sample appropriately to show around 100-200 points
+      const samplingRate = Math.max(1, Math.floor(sortedData.length / 150));
+      dataPoints = sortedData.filter((_, index) => index % samplingRate === 0);
+    }
+    
+    // If we still have too many points, limit to the most recent ones
+    const maxPoints = 200;
+    if (dataPoints.length > maxPoints) {
+      dataPoints = dataPoints.slice(-maxPoints);
+    }
 
-    const labels = limitedData.map(item => {
+    // Format the dates for display
+    const labels = dataPoints.map(item => {
       const date = new Date(item[0]);
-      return `${date.getDate()}.${date.getMonth() + 1} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+      if (timeRange <= 1) {
+        // For 1 day, show hours and minutes
+        return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+      } else if (timeRange <= 7) {
+        // For 1-7 days, show day and hour
+        return `${date.getDate()}.${date.getMonth() + 1} ${date.getHours()}h`;
+      } else {
+        // For longer periods, show date only
+        return `${date.getDate()}.${date.getMonth() + 1}`;
+      }
     });
 
-    const voltageData = limitedData.map(item => item[1]);
+    const voltageData = dataPoints.map(item => item[1]);
 
     // Create horizontal lines for the acceptable range
     const minVoltageData = Array(labels.length).fill(phaseData.acceptable_range.min);
@@ -130,7 +165,7 @@ function App() {
           borderColor: 'rgba(75, 192, 192, 1)',
           backgroundColor: 'rgba(75, 192, 192, 0.2)',
           tension: 0.1,
-          pointRadius: 1,
+          pointRadius: timeRange <= 1 ? 2 : 1, // Larger points for daily view
         },
         {
           label: 'Minimalni prihvatljivi napon (207V)',
@@ -163,6 +198,15 @@ function App() {
     };
   };
 
+  // Get chart title based on time range
+  const getChartTitle = () => {
+    if (timeRange === 1) return 'Istorija napona (danas)';
+    if (timeRange === 7) return 'Istorija napona (7 dana)';
+    if (timeRange === 14) return 'Istorija napona (14 dana)';
+    if (timeRange === 30) return 'Istorija napona (30 dana)';
+    return `Istorija napona (${timeRange} dana)`;
+  };
+
   const lineChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -172,7 +216,7 @@ function App() {
       },
       title: {
         display: true,
-        text: 'Istorija napona',
+        text: getChartTitle(),
       },
     },
     scales: {
@@ -279,10 +323,14 @@ function App() {
                 
                 return (
                   <div key={`line-${sensorId}`} className="bg-white p-4 rounded-lg shadow-md">
-                    <h2 className="text-xl font-bold mb-4">{phaseName} - Istorija napona</h2>
+                    <h2 className="text-xl font-bold mb-4">{phaseName} - {getChartTitle()}</h2>
                     <div className="h-80">
                       {lineData ? (
-                        <Line data={lineData} options={lineChartOptions} />
+                        <Line 
+                          key={`${sensorId}-${chartKey}`} 
+                          data={lineData} 
+                          options={lineChartOptions} 
+                        />
                       ) : (
                         <div className="flex justify-center items-center h-full">
                           <p className="text-gray-500">Nema dostupnih podataka za prikaz grafikona</p>
