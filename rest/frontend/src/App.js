@@ -6,11 +6,21 @@ import { Pie, Line } from 'react-chartjs-2';
 // Register ChartJS components
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title);
 
+// Get environment variables with fallbacks
+const API_URL = process.env.REACT_APP_API_URL || '';
+const REFRESH_INTERVAL = parseInt(process.env.REACT_APP_REFRESH_INTERVAL || '300000', 10);
+const DEFAULT_TIME_RANGE = parseInt(process.env.REACT_APP_DEFAULT_TIME_RANGE || '30', 10);
+
+// Create axios instance with base URL if provided
+const api = axios.create({
+  baseURL: API_URL,
+});
+
 function App() {
   const [powerStats, setPowerStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [timeRange, setTimeRange] = useState(30); // Default to 30 days
+  const [timeRange, setTimeRange] = useState(DEFAULT_TIME_RANGE);
 
   // Map sensor IDs to Serbian phase names
   const phaseNames = {
@@ -31,7 +41,8 @@ function App() {
     const fetchPowerStats = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`/api/power/stats?days=${timeRange}`);
+        // Use the API instance with the configured base URL
+        const response = await api.get(`/api/power/stats?days=${timeRange}`);
         setPowerStats(response.data);
         setError(null);
       } catch (err) {
@@ -44,8 +55,8 @@ function App() {
 
     fetchPowerStats();
 
-    // Set up polling every 5 minutes
-    const intervalId = setInterval(fetchPowerStats, 5 * 60 * 1000);
+    // Set up polling using the configured interval
+    const intervalId = setInterval(fetchPowerStats, REFRESH_INTERVAL);
 
     // Clean up on component unmount
     return () => clearInterval(intervalId);

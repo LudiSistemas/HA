@@ -45,10 +45,38 @@ if [ ! -d "frontend" ] || [ ! -d "backend" ]; then
   exit 1
 fi
 
+# Setup frontend environment
+echo ""
+echo "Setting up frontend environment..."
+cd frontend
+
+# Check if .env file exists for frontend
+if [ ! -f ".env" ]; then
+  echo "Creating .env file from .env.example..."
+  if [ -f ".env.example" ]; then
+    cp .env.example .env
+    echo "Please edit the frontend .env file with your API URL."
+    echo "You can open it with: nano frontend/.env"
+  else
+    echo "Warning: .env.example not found for frontend. Creating a basic .env file."
+    cat > .env << EOF
+# Backend API URL - Change this to your public backend URL
+REACT_APP_API_URL=http://localhost:8000
+
+# Refresh interval in milliseconds (5 minutes)
+REACT_APP_REFRESH_INTERVAL=300000
+
+# Default time range in days
+REACT_APP_DEFAULT_TIME_RANGE=30
+EOF
+    echo "Please edit the frontend .env file with your API URL."
+    echo "You can open it with: nano frontend/.env"
+  fi
+fi
+
 # Build frontend
 echo ""
 echo "Building frontend..."
-cd frontend
 npm install
 npm run build
 echo "Frontend build complete."
@@ -83,12 +111,12 @@ python -c "import fastapi, uvicorn, dotenv, requests, pydantic, slowapi, aiohttp
   pip install -r requirements.txt --force-reinstall
 }
 
-# Check if .env file exists
+# Check if .env file exists for backend
 if [ ! -f ".env" ]; then
   echo "Creating .env file from .env.example..."
   cp .env.example .env
-  echo "Please edit the .env file with your Home Assistant URL and token."
-  echo "You can open it with: nano .env"
+  echo "Please edit the backend .env file with your Home Assistant URL and token."
+  echo "You can open it with: nano backend/.env"
 fi
 
 # Create data directory if it doesn't exist
@@ -98,14 +126,21 @@ echo ""
 echo "Deployment preparation complete!"
 echo ""
 echo "To start the application:"
-echo "1. Make sure your .env file is configured correctly"
+echo "1. Make sure your .env files are configured correctly"
+echo "   - Backend .env: Home Assistant URL and token"
+echo "   - Frontend .env: Backend API URL"
+echo ""
 echo "2. Run the backend server:"
 echo "   cd backend"
 echo "   source venv/bin/activate"
 echo "   uvicorn main:app --host 0.0.0.0 --port 8000"
 echo ""
+echo "3. Serve the frontend build directory:"
+echo "   For development: cd frontend && npm start"
+echo "   For production: Configure a web server to serve the frontend/build directory"
+echo ""
 echo "For production deployment:"
-echo "1. Configure a web server (nginx, Apache) to serve the frontend build files"
+echo "1. Configure a web server (nginx, Apache) to serve the frontend/build directory"
 echo "2. Set up a reverse proxy to the backend API"
 echo "3. Consider using a process manager like systemd or supervisor to keep the backend running"
 echo ""
