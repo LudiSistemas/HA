@@ -76,6 +76,13 @@ echo "Installing backend dependencies..."
 pip install --upgrade pip
 pip install -r requirements.txt
 
+# Verify all dependencies are installed
+echo "Verifying dependencies..."
+python -c "import fastapi, uvicorn, dotenv, requests, pydantic, slowapi, aiohttp, httpx" || {
+  echo "Error: Some dependencies are missing. Trying to reinstall..."
+  pip install -r requirements.txt --force-reinstall
+}
+
 # Check if .env file exists
 if [ ! -f ".env" ]; then
   echo "Creating .env file from .env.example..."
