@@ -171,7 +171,12 @@ async def fetch_power_history(start_time=None, end_time=None):
     global power_history_cache, last_power_history_update
     
     current_time = time.time()
-    if current_time - last_power_history_update < POWER_HISTORY_CACHE_DURATION and power_history_cache:
+    cache_key = f"{start_time}_{end_time}"
+    
+    # Check if we have cached data for this specific time range
+    if (current_time - last_power_history_update < POWER_HISTORY_CACHE_DURATION and 
+        power_history_cache and 
+        getattr(fetch_power_history, "last_cache_key", None) == cache_key):
         return power_history_cache
     
     if not start_time:
@@ -182,6 +187,7 @@ async def fetch_power_history(start_time=None, end_time=None):
         end_time = datetime.now().isoformat()
     
     try:
+        logger.info(f"Fetching power history from {start_time} to {end_time}")
         url = f"{HASS_URL}/api/history/period/{start_time}"
         params = {
             "filter_entity_id": ",".join(POWER_SENSOR_IDS),
@@ -211,6 +217,7 @@ async def fetch_power_history(start_time=None, end_time=None):
                     
                     power_history_cache = processed_data
                     last_power_history_update = current_time
+                    fetch_power_history.last_cache_key = cache_key
                     return processed_data
                 else:
                     logger.error(f"Failed to fetch history data: {response.status}")
@@ -219,6 +226,9 @@ async def fetch_power_history(start_time=None, end_time=None):
     except Exception as e:
         logger.error(f"Error fetching power history data: {e}")
         return power_history_cache if power_history_cache else {}
+
+# Initialize the last_cache_key attribute
+fetch_power_history.last_cache_key = None
 
 @app.get("/api/power/current")
 async def get_power_data():
@@ -239,9 +249,18 @@ async def get_power_history(start_time: Optional[str] = None, end_time: Optional
 @app.get("/api/power/stats")
 async def get_power_stats(days: int = 30):
     """Get power statistics for voltage quality analysis"""
+    global power_history_cache, last_power_history_update
+    
     try:
         # Calculate the start time based on the requested days
         start_time = (datetime.now() - timedelta(days=days)).isoformat()
+        
+        # Clear the cache if we're requesting a different time range
+        # This ensures we get fresh data when changing the time range
+        if days != getattr(get_power_stats, "last_days", None):
+            power_history_cache = {}
+            last_power_history_update = 0
+            get_power_stats.last_days = days
         
         # Fetch the historical data
         history_data = await fetch_power_history(start_time)
@@ -309,6 +328,9 @@ async def get_power_stats(days: int = 30):
     except Exception as e:
         logger.error(f"Error calculating power statistics: {e}")
         raise HTTPException(status_code=500, detail=f"Error calculating power statistics: {str(e)}")
+
+# Initialize the last_days attribute
+get_power_stats.last_days = None
 
 if __name__ == "__main__":
     import uvicorn

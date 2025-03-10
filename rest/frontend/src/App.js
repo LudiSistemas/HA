@@ -37,22 +37,25 @@ function App() {
     borderColor: 'rgba(255, 255, 255, 1)'
   };
 
-  useEffect(() => {
-    const fetchPowerStats = async () => {
-      try {
-        setLoading(true);
-        // Use the API instance with the configured base URL
-        const response = await api.get(`/api/power/stats?days=${timeRange}`);
-        setPowerStats(response.data);
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching power stats:', err);
-        setError('Greška pri učitavanju podataka. Molimo pokušajte ponovo kasnije.');
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Function to fetch power stats
+  const fetchPowerStats = async () => {
+    try {
+      setLoading(true);
+      console.log(`Fetching power stats for ${timeRange} days...`);
+      const response = await api.get(`/api/power/stats?days=${timeRange}`);
+      console.log('Received power stats:', response.data);
+      setPowerStats(response.data);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching power stats:', err);
+      setError('Greška pri učitavanju podataka. Molimo pokušajte ponovo kasnije.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // Effect to fetch data when component mounts or timeRange changes
+  useEffect(() => {
     fetchPowerStats();
 
     // Set up polling using the configured interval
@@ -60,10 +63,13 @@ function App() {
 
     // Clean up on component unmount
     return () => clearInterval(intervalId);
-  }, [timeRange]);
+  }, [timeRange]); // This dependency array ensures the effect runs when timeRange changes
 
+  // Handle time range change
   const handleTimeRangeChange = (days) => {
+    console.log(`Changing time range to ${days} days`);
     setTimeRange(days);
+    // No need to call fetchPowerStats() here as the useEffect will trigger due to timeRange change
   };
 
   // Prepare pie chart data for a phase
