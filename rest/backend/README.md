@@ -76,11 +76,53 @@ Response format:
     "state": "value",
     "attributes": {
       "friendly_name": "Sensor Name",
-      "unit_of_measurement": "unit"
+      "unit_of_measurement": "unit",
+      "formatted_value": "human_readable_value"
     },
     "last_updated": "2024-01-01T12:00:00+00:00"
   }
 ]
+```
+
+**Lightning Sensors Special Handling:**
+- `sensor.home_lightning_azimuth`: Shows degrees (0-360°) or "No strikes" if null
+- `sensor.home_lightning_counter`: Always shows number of detected strikes (≥0)
+- `sensor.home_lightning_distance`: Shows distance in km or "No strikes" if null
+
+### GET /api/user-location
+Returns user's country based on IP address.
+
+### GET /api/lightning-status
+Returns current lightning detection status and statistics.
+
+Response format:
+```json
+{
+  "status": "active|inactive",
+  "timestamp": "2024-01-01T12:00:00+00:00",
+  "data": {
+    "azimuth": {
+      "value": "45.0",
+      "unit": "degrees",
+      "has_strikes": true
+    },
+    "distance": {
+      "value": "12.5",
+      "unit": "kilometers",
+      "has_strikes": true
+    },
+    "counter": {
+      "value": "15",
+      "unit": "strikes",
+      "total_strikes": 15
+    }
+  },
+  "summary": {
+    "has_lightning": true,
+    "sensor_count": 3,
+    "last_update": "2024-01-01T12:00:00+00:00"
+  }
+}
 ```
 
 ## Configuration Files

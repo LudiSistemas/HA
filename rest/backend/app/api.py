@@ -206,11 +206,36 @@ class SensorData(BaseModel):
             return "solar"
         elif "rain" in self.entity_id:
             return "rain"
+        elif "lightning" in self.entity_id:
+            return "lightning"
         return "unknown"
     
     def validate_state(self) -> bool:
         """Validates state based on sensor type"""
         try:
+            # Handle lightning sensors that can be null
+            if self.sensor_type == "lightning":
+                if self.state == "null" or self.state == "None":
+                    return True
+                if "counter" in self.entity_id:
+                    # Counter should always be a number >= 0
+                    value = float(self.state)
+                    return value >= 0
+                elif "azimuth" in self.entity_id:
+                    # Azimuth should be 0-360 degrees or null
+                    if self.state == "null" or self.state == "None":
+                        return True
+                    value = float(self.state)
+                    return 0 <= value <= 360
+                elif "distance" in self.entity_id:
+                    # Distance can be null or positive number
+                    if self.state == "null" or self.state == "None":
+                        return True
+                    value = float(self.state)
+                    return value >= 0
+                return True
+            
+            # Handle other sensor types
             value = float(self.state)
             if self.sensor_type == "temperature":
                 return -50 <= value <= 60
@@ -228,6 +253,9 @@ class SensorData(BaseModel):
                 return value >= 0
             return True
         except ValueError:
+            # For lightning sensors, "null" is valid
+            if self.sensor_type == "lightning" and self.state in ["null", "None"]:
+                return True
             return False
 
 def parse_sensor_ids(sensor_ids):
@@ -337,6 +365,40 @@ async def get_sensor_data(request: Request):
                                         sensor_data['state'] = str(rel_pressure)
                                     except (ValueError, TypeError) as e:
                                         logger.error(f"Error calculating relative pressure: {e}")
+                                
+                                # Handle lightning sensor data formatting
+                                if 'lightning' in sensor_id:
+                                    if 'azimuth' in sensor_id:
+                                        # Format azimuth: show degrees or "No strikes"
+                                        if sensor_data['state'] in ['null', 'None']:
+                                            sensor_data['state'] = 'No strikes'
+                                            sensor_data['attributes']['formatted_value'] = 'No strikes'
+                                        else:
+                                            try:
+                                                degrees = float(sensor_data['state'])
+                                                sensor_data['attributes']['formatted_value'] = f"{degrees}°"
+                                            except ValueError:
+                                                sensor_data['attributes']['formatted_value'] = sensor_data['state']
+                                    
+                                    elif 'distance' in sensor_id:
+                                        # Format distance: show km or "No strikes"
+                                        if sensor_data['state'] in ['null', 'None']:
+                                            sensor_data['state'] = 'No strikes'
+                                            sensor_data['attributes']['formatted_value'] = 'No strikes'
+                                        else:
+                                            try:
+                                                km = float(sensor_data['state'])
+                                                sensor_data['attributes']['formatted_value'] = f"{km} km"
+                                            except ValueError:
+                                                sensor_data['attributes']['formatted_value'] = sensor_data['state']
+                                    
+                                    elif 'counter' in sensor_id:
+                                        # Counter is always a number, format nicely
+                                        try:
+                                            count = int(float(sensor_data['state']))
+                                            sensor_data['attributes']['formatted_value'] = f"{count} strikes"
+                                        except ValueError:
+                                            sensor_data['attributes']['formatted_value'] = sensor_data['state']
                                 
                                 responses.append(sensor_data)
                             else:
@@ -503,4 +565,97 @@ async def get_user_location(request: Request):
     except Exception as e:
         logger.error(f"Error getting location: {e}")
         return {'country': 'Unknown', 'countryCode': 'UN'}
-    
+
+@router.get("/lightning-status")
+async def get_lightning_status(request: Request):
+    """Get current lightning detection status and statistics"""
+    try:
+        update_analytics(request)
+        
+        # Get current sensor data
+        cached_data = get_cached_data()
+        if not cached_data:
+            # Fetch fresh data if cache is empty
+            headers = {
+                "Authorization": f"Bearer {settings.HASS_TOKEN}",
+                "Content-Type": "application/json",
+            }
+            
+            async with httpx.AsyncClient() as client:
+                responses = []
+                sensor_ids = settings.sensor_list
+                
+                for sensor_id in sensor_ids:
+                    if 'lightning' in sensor_id:
+                        try:
+                            url = f"{settings.HASS_URL}/api/states/{sensor_id}"
+                            response = await client.get(
+                                url,
+                                headers=headers,
+                                timeout=10.0
+                            )
+                            
+                            if response.status_code == 200:
+                                responses.append(response.json())
+                        except Exception as e:
+                            logger.error(f"Error fetching lightning sensor {sensor_id}: {e}")
+                            continue
+                
+                cached_data = responses
+        
+        # Filter lightning sensors
+        lightning_sensors = [s for s in cached_data if 'lightning' in s.get('entity_id', '')]
+        
+        if not lightning_sensors:
+            return {
+                'status': 'no_lightning_sensors',
+                'message': 'No lightning sensors configured',
+                'data': {}
+            }
+        
+        # Process lightning data
+        lightning_data = {}
+        for sensor in lightning_sensors:
+            sensor_id = sensor['entity_id']
+            
+            if 'azimuth' in sensor_id:
+                lightning_data['azimuth'] = {
+                    'value': sensor['state'],
+                    'unit': 'degrees',
+                    'has_strikes': sensor['state'] not in ['null', 'None', 'No strikes']
+                }
+            elif 'distance' in sensor_id:
+                lightning_data['distance'] = {
+                    'value': sensor['state'],
+                    'unit': 'kilometers',
+                    'has_strikes': sensor['state'] not in ['null', 'None', 'No strikes']
+                }
+            elif 'counter' in sensor_id:
+                lightning_data['counter'] = {
+                    'value': sensor['state'],
+                    'unit': 'strikes',
+                    'total_strikes': int(float(sensor['state'])) if sensor['state'].replace('.', '').isdigit() else 0
+                }
+        
+        # Determine overall lightning status
+        has_active_strikes = any(
+            sensor.get('state') not in ['null', 'None', 'No strikes', '0']
+            for sensor in lightning_sensors
+        )
+        
+        status = 'active' if has_active_strikes else 'inactive'
+        
+        return {
+            'status': status,
+            'timestamp': datetime.now().isoformat(),
+            'data': lightning_data,
+            'summary': {
+                'has_lightning': has_active_strikes,
+                'sensor_count': len(lightning_sensors),
+                'last_update': max(s.get('last_updated', '') for s in lightning_sensors) if lightning_sensors else None
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting lightning status: {e}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving lightning status: {str(e)}")
