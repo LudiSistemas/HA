@@ -213,23 +213,23 @@ class SensorData(BaseModel):
     def validate_state(self) -> bool:
         """Validates state based on sensor type"""
         try:
-            # Handle lightning sensors that can be null
+            # Handle lightning sensors that can be null or unknown
             if self.sensor_type == "lightning":
-                if self.state == "null" or self.state == "None":
+                if self.state in ["null", "None", "unknown", "unavailable"]:
                     return True
                 if "counter" in self.entity_id:
                     # Counter should always be a number >= 0
                     value = float(self.state)
                     return value >= 0
                 elif "azimuth" in self.entity_id:
-                    # Azimuth should be 0-360 degrees or null
-                    if self.state == "null" or self.state == "None":
+                    # Azimuth should be 0-360 degrees or null/unknown
+                    if self.state in ["null", "None", "unknown", "unavailable"]:
                         return True
                     value = float(self.state)
                     return 0 <= value <= 360
                 elif "distance" in self.entity_id:
-                    # Distance can be null or positive number
-                    if self.state == "null" or self.state == "None":
+                    # Distance can be null/unknown or positive number
+                    if self.state in ["null", "None", "unknown", "unavailable"]:
                         return True
                     value = float(self.state)
                     return value >= 0
@@ -253,8 +253,8 @@ class SensorData(BaseModel):
                 return value >= 0
             return True
         except ValueError:
-            # For lightning sensors, "null" is valid
-            if self.sensor_type == "lightning" and self.state in ["null", "None"]:
+            # For lightning sensors, "null", "unknown", etc. are valid
+            if self.sensor_type == "lightning" and self.state in ["null", "None", "unknown", "unavailable"]:
                 return True
             return False
 
@@ -370,7 +370,7 @@ async def get_sensor_data(request: Request):
                                 if 'lightning' in sensor_id:
                                     if 'azimuth' in sensor_id:
                                         # Format azimuth: show degrees or "No strikes"
-                                        if sensor_data['state'] in ['null', 'None']:
+                                        if sensor_data['state'] in ['null', 'None', 'unknown', 'unavailable']:
                                             sensor_data['state'] = 'No strikes'
                                             sensor_data['attributes']['formatted_value'] = 'No strikes'
                                         else:
@@ -382,7 +382,7 @@ async def get_sensor_data(request: Request):
                                     
                                     elif 'distance' in sensor_id:
                                         # Format distance: show km or "No strikes"
-                                        if sensor_data['state'] in ['null', 'None']:
+                                        if sensor_data['state'] in ['null', 'None', 'unknown', 'unavailable']:
                                             sensor_data['state'] = 'No strikes'
                                             sensor_data['attributes']['formatted_value'] = 'No strikes'
                                         else:
@@ -622,13 +622,13 @@ async def get_lightning_status(request: Request):
                 lightning_data['azimuth'] = {
                     'value': sensor['state'],
                     'unit': 'degrees',
-                    'has_strikes': sensor['state'] not in ['null', 'None', 'No strikes']
+                    'has_strikes': sensor['state'] not in ['null', 'None', 'unknown', 'unavailable', 'No strikes']
                 }
             elif 'distance' in sensor_id:
                 lightning_data['distance'] = {
                     'value': sensor['state'],
                     'unit': 'kilometers',
-                    'has_strikes': sensor['state'] not in ['null', 'None', 'No strikes']
+                    'has_strikes': sensor['state'] not in ['null', 'None', 'unknown', 'unavailable', 'No strikes']
                 }
             elif 'counter' in sensor_id:
                 lightning_data['counter'] = {
@@ -639,7 +639,7 @@ async def get_lightning_status(request: Request):
         
         # Determine overall lightning status
         has_active_strikes = any(
-            sensor.get('state') not in ['null', 'None', 'No strikes', '0']
+            sensor.get('state') not in ['null', 'None', 'unknown', 'unavailable', 'No strikes', '0']
             for sensor in lightning_sensors
         )
         
