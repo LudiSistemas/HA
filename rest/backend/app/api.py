@@ -23,6 +23,11 @@ router = APIRouter(prefix="/api", tags=["sensors"])
 sensor_cache: Dict[str, Tuple[list, datetime]] = {}
 CACHE_TTL = 60  # seconds
 
+# Lightning history cache
+lightning_history_cache = {}
+lightning_history_cache_time = None
+lightning_history_cache_duration = 3600  # 1 hour
+
 # Define path for analytics data
 ANALYTICS_FILE = Path(__file__).parent.parent / 'data' / 'analytics.json'
 
@@ -566,19 +571,9 @@ async def get_user_location(request: Request):
         logger.error(f"Error getting location: {e}")
         return {'country': 'Unknown', 'countryCode': 'UN'}
 
-@router.get("/lightning-history")
-async def get_lightning_history(request: Request, hours: int = 24, sensor_type: str = "all"):
-    """Get historical lightning data for specified time period"""
+async def fetch_lightning_history_from_ha(hours: int, sensor_type: str = "all"):
+    """Fetch lightning history data from Home Assistant"""
     try:
-        update_analytics(request)
-        
-        # Validate parameters
-        if hours < 1 or hours > 168:  # Max 1 week
-            raise HTTPException(status_code=400, detail="Hours must be between 1 and 168")
-        
-        if sensor_type not in ["all", "azimuth", "distance", "counter"]:
-            raise HTTPException(status_code=400, detail="Sensor type must be 'all', 'azimuth', 'distance', or 'counter'")
-        
         # Calculate timestamps
         now = datetime.now().replace(tzinfo=None)
         start_time = now - timedelta(hours=hours)
@@ -591,11 +586,7 @@ async def get_lightning_history(request: Request, hours: int = 24, sensor_type: 
                     lightning_sensors.append(sensor_id)
         
         if not lightning_sensors:
-            return {
-                'status': 'no_lightning_sensors',
-                'message': f'No lightning sensors found for type: {sensor_type}',
-                'data': {}
-            }
+            return None
         
         # Fetch historical data for each sensor
         headers = {
@@ -662,70 +653,145 @@ async def get_lightning_history(request: Request, hours: int = 24, sensor_type: 
                                                 })
                                         except (ValueError, TypeError):
                                             continue
-                                    
                                 except Exception as e:
                                     logger.error(f"Error processing history item: {e}")
                                     continue
                             
-                            # Sort by timestamp
-                            processed_history.sort(key=lambda x: x['timestamp'])
-                            
-                            # Add to results
-                            if 'azimuth' in sensor_id:
-                                history_data['azimuth'] = {
-                                    'sensor_id': sensor_id,
-                                    'total_events': len(processed_history),
-                                    'history': processed_history,
-                                    'last_event': processed_history[-1] if processed_history else None
-                                }
-                            elif 'distance' in sensor_id:
-                                history_data['distance'] = {
-                                    'sensor_id': sensor_id,
-                                    'total_events': len(processed_history),
-                                    'history': processed_history,
-                                    'last_event': processed_history[-1] if processed_history else None
-                                }
-                            elif 'counter' in sensor_id:
-                                history_data['counter'] = {
-                                    'sensor_id': sensor_id,
-                                    'total_events': len(processed_history),
-                                    'current_total': processed_history[-1]['value'] if processed_history else 0,
-                                    'history': processed_history,
-                                    'last_event': processed_history[-1] if processed_history else None
-                                }
-                    
+                            history_data[sensor_id] = {
+                                'sensor_id': sensor_id,
+                                'total_events': len(processed_history),
+                                'history': processed_history,
+                                'last_event': processed_history[-1] if processed_history else None
+                            }
+                        else:
+                            history_data[sensor_id] = {
+                                'sensor_id': sensor_id,
+                                'total_events': 0,
+                                'history': [],
+                                'last_event': None
+                            }
+                    else:
+                        logger.error(f"Failed to fetch history for {sensor_id}: {response.status_code}")
+                        history_data[sensor_id] = {
+                            'sensor_id': sensor_id,
+                            'total_events': 0,
+                            'history': [],
+                            'last_event': None
+                        }
+                        
                 except Exception as e:
                     logger.error(f"Error fetching history for {sensor_id}: {e}")
-                    continue
+                    history_data[sensor_id] = {
+                        'sensor_id': sensor_id,
+                        'total_events': 0,
+                        'history': [],
+                        'last_event': None
+                    }
         
-        # Calculate summary statistics
-        total_strikes = sum(len(data.get('history', [])) for data in history_data.values() if 'counter' not in data.get('sensor_id', ''))
+        return history_data
+        
+    except Exception as e:
+        logger.error(f"Error fetching lightning history from HA: {e}")
+        return None
+
+@router.get("/lightning-history")
+async def get_lightning_history(request: Request, hours: int = 24, sensor_type: str = "all"):
+    """Get historical lightning data for specified time period with caching"""
+    try:
+        update_analytics(request)
+        
+        # Validate parameters
+        if hours < 1 or hours > 168:  # Max 1 week
+            raise HTTPException(status_code=400, detail="Hours must be between 1 and 168")
+        
+        if sensor_type not in ["all", "azimuth", "distance", "counter"]:
+            raise HTTPException(status_code=400, detail="Sensor type must be 'all', 'azimuth', 'distance', or 'counter'")
+        
+        # Check cache first
+        global lightning_history_cache, lightning_history_cache_time
+        current_time = time.time()
+        cache_key = f"{hours}_{sensor_type}"
+        
+        # Check if cache is valid
+        if (lightning_history_cache.get(cache_key) and 
+            lightning_history_cache_time and 
+            current_time - lightning_history_cache_time < lightning_history_cache_duration):
+            
+            cached_data = lightning_history_cache[cache_key]
+            cache_age = int(current_time - lightning_history_cache_time)
+            
+            logger.info(f"Returning cached lightning history (age: {cache_age}s)")
+            
+            # Check for recent activity in cached data
+            now = datetime.now().replace(tzinfo=None)
+            has_recent_activity = any(
+                data.get('last_event') and 
+                (now - datetime.fromisoformat(data['last_event']['timestamp'].replace('Z', '+00:00').replace('+00:00', '')).replace(tzinfo=None)).total_seconds() < 3600
+                for data in cached_data.values()
+            )
+            
+            return {
+                "status": "success",
+                "period": {
+                    "start": (now - timedelta(hours=hours)).isoformat(),
+                    "end": now.isoformat(),
+                    "hours": hours
+                },
+                "sensor_type": sensor_type,
+                "data": cached_data,
+                "summary": {
+                    "total_sensors": len(cached_data),
+                    "total_events": sum(data['total_events'] for data in cached_data.values()),
+                    "has_recent_activity": has_recent_activity,
+                    "cache_info": {
+                        "cached": True,
+                        "cache_age": cache_age
+                    }
+                }
+            }
+        
+        # Cache miss or expired - fetch fresh data
+        logger.info("Cache miss for lightning history, fetching fresh data from HA")
+        
+        processed_data = await fetch_lightning_history_from_ha(hours, sensor_type)
+        if processed_data is None:
+            raise HTTPException(status_code=500, detail="Failed to fetch lightning history data")
+        
+        # Update cache
+        lightning_history_cache[cache_key] = processed_data
+        lightning_history_cache_time = current_time
+        
+        # Check for recent activity
+        now = datetime.now().replace(tzinfo=None)
         has_recent_activity = any(
             data.get('last_event') and 
             (now - datetime.fromisoformat(data['last_event']['timestamp'].replace('Z', '+00:00').replace('+00:00', '')).replace(tzinfo=None)).total_seconds() < 3600
-            for data in history_data.values()
+            for data in processed_data.values()
         )
         
         return {
-            'status': 'success',
-            'period': {
-                'start': start_time.isoformat(),
-                'end': now.isoformat(),
-                'hours': hours
+            "status": "success",
+            "period": {
+                "start": (now - timedelta(hours=hours)).isoformat(),
+                "end": now.isoformat(),
+                "hours": hours
             },
-            'sensor_type': sensor_type,
-            'data': history_data,
-            'summary': {
-                'total_sensors': len(lightning_sensors),
-                'total_strikes_detected': total_strikes,
-                'has_recent_activity': has_recent_activity,
-                'last_update': now.isoformat()
+            "sensor_type": sensor_type,
+            "data": processed_data,
+            "summary": {
+                "total_sensors": len(processed_data),
+                "total_events": sum(data['total_events'] for data in processed_data.values()),
+                "has_recent_activity": has_recent_activity,
+                "cache_info": {
+                    "cached": False,
+                    "cache_age": None
+                }
             }
         }
         
     except Exception as e:
-        logger.error(f"Error getting lightning history: {e}")
-        raise HTTPException(status_code=500, detail=f"Error retrieving lightning history: {str(e)}")
+        logger.error(f"Error in lightning history: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @router.get("/lightning-status")
 async def get_lightning_status(request: Request):
