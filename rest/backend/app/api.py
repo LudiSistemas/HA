@@ -566,6 +566,167 @@ async def get_user_location(request: Request):
         logger.error(f"Error getting location: {e}")
         return {'country': 'Unknown', 'countryCode': 'UN'}
 
+@router.get("/lightning-history")
+async def get_lightning_history(request: Request, hours: int = 24, sensor_type: str = "all"):
+    """Get historical lightning data for specified time period"""
+    try:
+        update_analytics(request)
+        
+        # Validate parameters
+        if hours < 1 or hours > 168:  # Max 1 week
+            raise HTTPException(status_code=400, detail="Hours must be between 1 and 168")
+        
+        if sensor_type not in ["all", "azimuth", "distance", "counter"]:
+            raise HTTPException(status_code=400, detail="Sensor type must be 'all', 'azimuth', 'distance', or 'counter'")
+        
+        # Calculate timestamps
+        now = datetime.now().replace(tzinfo=None)
+        start_time = now - timedelta(hours=hours)
+        
+        # Get lightning sensor IDs
+        lightning_sensors = []
+        for sensor_id in settings.sensor_list:
+            if 'lightning' in sensor_id:
+                if sensor_type == "all" or sensor_type in sensor_id:
+                    lightning_sensors.append(sensor_id)
+        
+        if not lightning_sensors:
+            return {
+                'status': 'no_lightning_sensors',
+                'message': f'No lightning sensors found for type: {sensor_type}',
+                'data': {}
+            }
+        
+        # Fetch historical data for each sensor
+        headers = {
+            "Authorization": f"Bearer {settings.HASS_TOKEN}",
+            "Content-Type": "application/json",
+        }
+        
+        history_data = {}
+        
+        async with httpx.AsyncClient() as client:
+            for sensor_id in lightning_sensors:
+                try:
+                    # Get history from Home Assistant
+                    response = await client.get(
+                        f"{settings.HASS_URL}/api/history/period/{start_time.isoformat()}",
+                        headers=headers,
+                        params={
+                            "filter_entity_id": sensor_id,
+                            "end_time": now.isoformat(),
+                            "minimal_response": False
+                        },
+                        timeout=15.0
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data and len(data) > 0:
+                            history = data[0]
+                            
+                            # Process history data
+                            processed_history = []
+                            for item in history:
+                                try:
+                                    state = item.get('state', '')
+                                    # Skip invalid states
+                                    if state in ['null', 'None', 'unknown', 'unavailable']:
+                                        continue
+                                    
+                                    # Parse numeric values
+                                    if 'counter' in sensor_id:
+                                        try:
+                                            value = int(float(state))
+                                            processed_history.append({
+                                                'timestamp': item.get('last_updated', item.get('last_changed')),
+                                                'value': value,
+                                                'formatted': f"{value} strikes"
+                                            })
+                                        except (ValueError, TypeError):
+                                            continue
+                                    else:
+                                        try:
+                                            value = float(state)
+                                            if 'azimuth' in sensor_id and 0 <= value <= 360:
+                                                processed_history.append({
+                                                    'timestamp': item.get('last_updated', item.get('last_changed')),
+                                                    'value': value,
+                                                    'formatted': f"{value}°"
+                                                })
+                                            elif 'distance' in sensor_id and value >= 0:
+                                                processed_history.append({
+                                                    'timestamp': item.get('last_updated', item.get('last_changed')),
+                                                    'value': value,
+                                                    'formatted': f"{value} km"
+                                                })
+                                        except (ValueError, TypeError):
+                                            continue
+                                    
+                                except Exception as e:
+                                    logger.error(f"Error processing history item: {e}")
+                                    continue
+                            
+                            # Sort by timestamp
+                            processed_history.sort(key=lambda x: x['timestamp'])
+                            
+                            # Add to results
+                            if 'azimuth' in sensor_id:
+                                history_data['azimuth'] = {
+                                    'sensor_id': sensor_id,
+                                    'total_events': len(processed_history),
+                                    'history': processed_history,
+                                    'last_event': processed_history[-1] if processed_history else None
+                                }
+                            elif 'distance' in sensor_id:
+                                history_data['distance'] = {
+                                    'sensor_id': sensor_id,
+                                    'total_events': len(processed_history),
+                                    'history': processed_history,
+                                    'last_event': processed_history[-1] if processed_history else None
+                                }
+                            elif 'counter' in sensor_id:
+                                history_data['counter'] = {
+                                    'sensor_id': sensor_id,
+                                    'total_events': len(processed_history),
+                                    'current_total': processed_history[-1]['value'] if processed_history else 0,
+                                    'history': processed_history,
+                                    'last_event': processed_history[-1] if processed_history else None
+                                }
+                    
+                except Exception as e:
+                    logger.error(f"Error fetching history for {sensor_id}: {e}")
+                    continue
+        
+        # Calculate summary statistics
+        total_strikes = sum(len(data.get('history', [])) for data in history_data.values() if 'counter' not in data.get('sensor_id', ''))
+        has_recent_activity = any(
+            data.get('last_event') and 
+            (now - datetime.fromisoformat(data['last_event']['timestamp'].replace('Z', '+00:00').replace('+00:00', '')).replace(tzinfo=None)).total_seconds() < 3600
+            for data in history_data.values()
+        )
+        
+        return {
+            'status': 'success',
+            'period': {
+                'start': start_time.isoformat(),
+                'end': now.isoformat(),
+                'hours': hours
+            },
+            'sensor_type': sensor_type,
+            'data': history_data,
+            'summary': {
+                'total_sensors': len(lightning_sensors),
+                'total_strikes_detected': total_strikes,
+                'has_recent_activity': has_recent_activity,
+                'last_update': now.isoformat()
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting lightning history: {e}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving lightning history: {str(e)}")
+
 @router.get("/lightning-status")
 async def get_lightning_status(request: Request):
     """Get current lightning detection status and statistics"""

@@ -92,6 +92,51 @@ Response format:
 ### GET /api/user-location
 Returns user's country based on IP address.
 
+### GET /api/lightning-history
+Returns historical lightning data for specified time period.
+
+**Parameters:**
+- `hours` (optional): Number of hours to look back (1-168, default: 24)
+- `sensor_type` (optional): Filter by sensor type - "all", "azimuth", "distance", or "counter" (default: "all")
+
+**Example:**
+```
+GET /api/lightning-history?hours=48&sensor_type=azimuth
+```
+
+**Response format:**
+```json
+{
+  "status": "success",
+  "period": {
+    "start": "2025-08-20T22:32:12.039639",
+    "end": "2025-08-22T22:32:12.039639",
+    "hours": 48
+  },
+  "sensor_type": "azimuth",
+  "data": {
+    "azimuth": {
+      "sensor_id": "sensor.home_lightning_azimuth",
+      "total_events": 5,
+      "history": [
+        {
+          "timestamp": "2025-08-21T14:30:00+00:00",
+          "value": 45.0,
+          "formatted": "45.0°"
+        }
+      ],
+      "last_event": {...}
+    }
+  },
+  "summary": {
+    "total_sensors": 1,
+    "total_strikes_detected": 5,
+    "has_recent_activity": false,
+    "last_update": "2025-08-22T22:32:12.039639"
+  }
+}
+```
+
 ### GET /api/lightning-status
 Returns current lightning detection status and statistics.
 
